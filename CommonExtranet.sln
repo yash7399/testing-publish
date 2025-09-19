@@ -1,0 +1,52 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{E24C65DC-7377-472B-9ABA-BC803B73C61A}") = "SMSInterface", "SMSInterface\", "{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}"
+	ProjectSection(WebsiteProperties) = preProject
+		TargetFrameworkMoniker = ".NETFramework,Version%3Dv4.5.1"
+		ProjectReferences = ""
+		Debug.AspNetCompiler.VirtualPath = "/SMSInterface"
+		Debug.AspNetCompiler.PhysicalPath = "SMSInterface\"
+		Debug.AspNetCompiler.TargetPath = "PrecompiledWeb\SMSInterface\"
+		Debug.AspNetCompiler.Updateable = "true"
+		Debug.AspNetCompiler.ForceOverwrite = "true"
+		Debug.AspNetCompiler.FixedNames = "true"
+		Debug.AspNetCompiler.Debug = "True"
+		Release.AspNetCompiler.VirtualPath = "/SMSInterface"
+		Release.AspNetCompiler.PhysicalPath = "SMSInterface\"
+		Release.AspNetCompiler.TargetPath = "PrecompiledWeb\SMSInterface\"
+		Release.AspNetCompiler.Updateable = "true"
+		Release.AspNetCompiler.ForceOverwrite = "true"
+		Release.AspNetCompiler.FixedNames = "true"
+		Release.AspNetCompiler.Debug = "False"
+		VWDPort = "56241"
+		SlnRelativePath = "SMSInterface\"
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|.NET = Debug|.NET
+		Debug|Any CPU = Debug|Any CPU
+		Debug|Mixed Platforms = Debug|Mixed Platforms
+		Release|.NET = Release|.NET
+		Release|Any CPU = Release|Any CPU
+		Release|Mixed Platforms = Release|Mixed Platforms
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}.Debug|.NET.ActiveCfg = Debug|Any CPU
+		{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}.Release|.NET.ActiveCfg = Debug|Any CPU
+		{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}.Release|Any CPU.ActiveCfg = Debug|Any CPU
+		{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}.Release|Any CPU.Build.0 = Debug|Any CPU
+		{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}.Release|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{25EE4ECA-1520-4A59-AF9F-860FC13C7DC6}.Release|Mixed Platforms.Build.0 = Debug|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

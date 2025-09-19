@@ -1,0 +1,66 @@
+﻿<%@ Master Language="C#" AutoEventWireup="true" CodeFile="NCDEXcommon.master.cs" Inherits="NCDEXcommon" %>
+
+<%@ Register Src="Include/Menu.ascx" TagName="Menu" TagPrefix="uc1" %>
+<%@ Register Src="Include/bottom.ascx" TagName="bottom" TagPrefix="uc2" %>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+    <title>
+        <asp:ContentPlaceHolder ID="head" runat="server">
+        </asp:ContentPlaceHolder>
+    </title>
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="-1">
+    <meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
+    <link href="CSS/NCDEX.CSS" type="text/css" rel="stylesheet">
+    <script language="javascript" type="text/javascript">
+        history.forward();
+    </script>
+</head>
+
+<body bgcolor="#ffffff" leftmargin="0" topmargin="0" marginwidth="0" marginheight="0">
+    <form id="form1" method="post" runat="server">
+        <asp:Literal ID="AntiForgeryToken" runat="server" />
+        <div align="center">
+            <table cellspacing="0" cellpadding="0" width="776" border="0">
+                <tr>
+                    <td style="width: 236px" valign="top" width="242" align="center">
+                        <a href="http://www.ncdex.com/">
+                            <img height="90" src="Images/logonew.gif" border="0"></a>
+                    </td>
+                    <td class="Tophead" valign="top" align="center" width="69%">
+                        <br>
+                        NCDEX Common Files&nbsp;
+                    </td>
+                </tr>
+                <!-- Body content starts here -->
+                <tr>
+                    <td valign="top" colspan="2">
+                        <table bordercolor="#990000" cellspacing="0" cellpadding="0" width="100%" border="1" height="500">
+                            <tr>
+                                <td valign="top" width="242" align="left">
+                                    <uc1:Menu ID="Menu1" runat="server" />
+                                </td>
+                                <td valign="top">
+
+                                    <asp:ContentPlaceHolder ID="ContentPlaceHolder1" runat="server">
+                                    </asp:ContentPlaceHolder>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <!-- Body content Ends here -->
+                <tr>
+                    <td colspan="2" align="left">
+                        <uc2:bottom ID="bottom1" runat="server" />
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </form>
+</body>
+
+</html>

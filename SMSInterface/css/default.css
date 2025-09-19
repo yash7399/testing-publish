@@ -1,0 +1,120 @@
+@charset "utf-8";
+/* CSS Document */
+
+body{
+	margin:0px;
+	text-align: center;
+	font-family:"Arial", Gadget, sans-serif;
+	font-size:11px;
+	color:#000;
+	font-weight:normal;
+}
+.footertxt {
+
+	padding:0px;
+	color:#000;
+	font-weight:bold;
+}
+.HeaderBox{
+	width:221px;
+	height:82px;
+	font-family:"Arial", Gadget, sans-serif;
+	font-size:11px;
+	color:#FFF;
+	font-weight:normal;
+	background-image:url(../images/logintop.jpg);
+	background-repeat:no-repeat;
+	text-align: right;
+}
+.HeaderBox table {
+	text-align: right;
+}
+
+
+
+.PageTitle{
+	font-family:"Arial", Gadget, sans-serif;
+	font-size:22px;
+	color:#f3eb83;
+	font-weight:bold;
+	text-align: left;
+	margin-top:10px;
+}
+
+.Welcome{
+	font-size:11px;
+	color:#fff;}
+
+.ContentBox{width:970px;
+background-image:url(../images/searchbg.gif);
+background-repeat: repeat-x;
+height:auto;
+background-color:#e0e0e0;
+color:#000;
+text-align:left;
+padding:8px;
+margin-bottom:10px;}
+
+#Logout{ margin-top:10px;margin-bottom:10px;
+}
+
+
+#Logout a:link{
+color: #fff;text-decoration: none;
+}
+
+#Logout a:hover{
+text-decoration:underline;
+}
+#Logout a:selected{
+color: #fff;text-decoration: none;
+}
+#Logout a:visited
+{
+color: #fff;text-decoration: none;
+
+
+}
+.setzindex {
+	font-size: 11px;
+    color: #000;
+    padding: 3px 5px;
+    border: 1px solid #999;
+    background: #fff;
+    width: 300px;
+    float: left;
+    z-index: 1;
+    position:absolute;
+    margin-left:0px;
+
+}
+
+.modalBackground 
+{
+      background-color:white;
+      filter:alpha(opacity=90);
+      opacity:0.9;
+}
+
+.modalCss
+{
+background-color:grey;
+/*background: url('../Images/overlay.png') no-repeat;*/
+background-position:center;
+padding:0;
+border: none;
+}.modalBackground 
+{
+      background-color:white;
+      filter:alpha(opacity=90);
+      opacity:0.9;
+}
+
+.modalCss
+{
+background-color:grey;
+/*background: url('../Images/overlay.png') no-repeat;*/
+background-position:center;
+padding:0;
+border: none;
+}

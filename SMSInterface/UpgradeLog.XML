@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type='text/xsl' href='_UpgradeReport_Files/UpgradeReport.xslt'?><UpgradeLog>
+<Properties><Property Name="Solution" Value="NCDEXCommon">
+</Property><Property Name="Solution File" Value="D:\All_ProductionCode\NCDEXCommon\NCDEXCommon.sln">
+</Property><Property Name="Date" Value="17 October 2012">
+</Property><Property Name="Time" Value="12:15">
+</Property></Properties><Event ErrorLevel="2" Project="NCDEXCommon" Source="http://localhost/NCDEXCommon" Description="Unable to open the Web site 'http://localhost/NCDEXCommon'. To access local IIS Web sites, you must install the following IIS components:&#xA;&#xA;      IIS 6 Metabase and IIS 6 Configuration Compatibility&#xA;      ASP.NET&#xA;&#xA;In addition, you must run Visual Studio in the context of an administrator account.&#xA;&#xA;For more information, press F1.">
+</Event><Event ErrorLevel="0" Project="" Source="NCDEXCommon.sln" Description="Solution converted successfully">
+</Event><Event ErrorLevel="3" Project="" Source="NCDEXCommon.sln" Description="Converted">
+</Event></UpgradeLog>
