@@ -19,6 +19,9 @@
                 <li>
                     <A href="Nextra.aspx">Nextra</A>
                 </li>
+                 <li>
+                    <A href="Archivess.aspx">Archives</A>
+                </li>
                <%-- <li>
                     
                     <A href="TradeX.aspx">TradeXInstaller</A>
@@ -27,7 +30,7 @@
                     <A href="Downloads/TradeX_Help_Ver_1.0.0.pdf" target="_blank">TradeX Help Doc </A>
                 </li>--%>
 			</ul>
-			        <asp:button id="Button1" Text="Logout" runat="server" CssClass="button" Height="23" Width="55" onclick="Button1_Click"></asp:button>
+			      <!--    <asp:button id="Button1" Text="Logout" runat="server" CssClass="button" Height="23" Width="55" onclick="Button1_Click"></asp:button> -->
 			</div>
         </td>
     </tr>

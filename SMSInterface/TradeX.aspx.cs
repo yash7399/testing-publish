@@ -16,12 +16,12 @@ public partial class TradeX : System.Web.UI.Page
 
     protected void Page_Load(object sender, EventArgs e)
     {
-        if (Session["ID"].ToString() != Session.SessionID.ToString())
+     /*   if (Session["ID"].ToString() != Session.SessionID.ToString())
         {
             Session["ID"] = "";
             Session.Abandon();
             Response.Redirect("default.aspx");
-        }
+        } */
 
         strFilePath = ConfigurationManager.AppSettings.Get("DownloadTradeX");
         strFilePathTst = ConfigurationManager.AppSettings.Get("Parameters");

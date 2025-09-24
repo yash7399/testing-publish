@@ -8,14 +8,14 @@ public partial class Include_Menu : System.Web.UI.UserControl
 {
     protected void Page_Load(object sender, EventArgs e)
     {
-        if (Session["ID"].ToString() == Session.SessionID.ToString())
+        /*if (Session["ID"].ToString() == Session.SessionID.ToString())
         {
             Button1.Visible = true;
         }
         else
         {
             Button1.Visible = false;
-        }
+        } */
     }
 
     protected void Button1_Click(object sender, EventArgs e)

@@ -15,11 +15,11 @@ public partial class NCDEXcommon : System.Web.UI.MasterPage
     
     protected void Page_Load(object sender, EventArgs e)
     {
-        string Sid;        
+        //string Sid;        
         try
         {
-            Sid = Session["ID"].ToString();
-            if (Session["ID"].ToString() != Session.SessionID.ToString())
+           // Sid = Session["ID"].ToString();
+          /*  if (Session["ID"].ToString() != Session.SessionID.ToString())
             {
                 Session["ID"] = "";
                 Session.Abandon();
@@ -34,13 +34,13 @@ public partial class NCDEXcommon : System.Web.UI.MasterPage
                 //Response.AddHeader("Referrer-Policy", "no-referrer");
                 Response.AddHeader("X-Xss-Protection", "1; mode=block");
                 //Response.AddHeader("X-Content-Type-Options", "nosniff");
-                //Response.AddHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-            }        
+                //Response.AddHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains"); 
+            }  */      
         }
         catch (Exception ex)
         {
-            Sid = null;
-            Response.Redirect("default.aspx");
+           // Sid = null;
+          //  Response.Redirect("default.aspx");
         }       
     }
     protected void Page_Init(object sender, EventArgs e)

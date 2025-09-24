@@ -33,7 +33,7 @@ public partial class Bhavcopy : System.Web.UI.Page
     {
         //string abc =Session["ID"].ToString();
         //string bcd = Session.SessionID.ToString(); 
-        if (Session["ID"] != null)
+       /* if (Session["ID"] != null)
         {
             if (Session["ID"].ToString() != Session.SessionID.ToString())
             {
@@ -47,12 +47,22 @@ public partial class Bhavcopy : System.Web.UI.Page
             Session["ID"] = "";
             Session.Abandon();
             Response.Redirect("default.aspx");
-        }
+        } */
 
         strFilePath = ConfigurationManager.AppSettings.Get("BhavcocyFiles");
         myDirInfo = new DirectoryInfo(strFilePath);
         if (!IsPostBack)
         {
+            Response.Cache.SetCacheability(HttpCacheability.NoCache);
+            Response.Cache.SetExpires(DateTime.Now);
+            //Response.Cache.SetExpires(DateTime.Now.AddDays(-1)); //Expires : date time
+            Response.Cache.SetNoServerCaching(); // just check it once whether we have to enable server side caching  or not if we have removed log in facility.
+            Response.Cache.SetNoStore();
+            Response.Cache.SetProxyMaxAge(new TimeSpan(0, 0, 0)); //Cache-Control: s-maxage=0
+            Response.Cache.SetValidUntilExpires(false);
+            Response.Cache.SetRevalidation(HttpCacheRevalidation.AllCaches);//Cache-Control:  must-revalidate
+            Response.AddHeader("Content-Security-Policy", "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data:; style-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; ");
+            Response.AddHeader("X-Xss-Protection", "1; mode=block");
             checkFiles();
         }
     }
