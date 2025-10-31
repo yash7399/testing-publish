@@ -14,18 +14,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ✅ Setup MSBuild (auto-detects version, no VS constraint)
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
-        with:
-          vs-version: '[16.0,17.0)'  # use modern msbuild, still compatible
 
       - name: Build website.publishproj
+        shell: pwsh
         run: |
-          msbuild "SMSInterface/website.publishproj" ^
-            /p:Configuration=Release ^
-            /p:Platform="Any CPU" ^
-            /p:DebugSymbols=false ^
-            /p:DebugType=None ^
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" `
+            "SMSInterface\website.publishproj" `
+            /p:Configuration=Release `
+            /p:Platform="Any CPU" `
+            /p:DebugSymbols=false `
+            /p:DebugType=None `
             /t:Build
 
       - name: Collect DLLs
@@ -34,7 +35,7 @@ jobs:
           $outFolder = "SMSInterface\dlls"
           New-Item -ItemType Directory -Force -Path $outFolder | Out-Null
           Get-ChildItem -Path "SMSInterface" -Recurse -Include *.dll | Copy-Item -Destination $outFolder -Force
-          Write-Host "DLLs collected in $outFolder"
+          Write-Host "✅ DLLs collected in $outFolder"
 
       - name: Configure Git
         run: |
