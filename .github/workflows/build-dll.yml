@@ -1,4 +1,4 @@
-name: Build Website and Deploy DLLs to Repo Bin
+name: Build Website and Add DLLs (No Overwrite)
 
 on:
   push:
@@ -12,17 +12,18 @@ permissions:
 jobs:
   build-and-push:
     runs-on: windows-latest
+
     steps:
-      - name: Checkout repository (with write permissions)
+      - name: Checkout repository (with write access)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0     # full history so git push works reliably
+          fetch-depth: 0
           persist-credentials: true
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build / Publish Website
+      - name: Build Website
         run: |
           msbuild "SMSInterface\\website.publishproj" ^
             /p:Configuration=Release ^
@@ -31,41 +32,53 @@ jobs:
             /p:DeleteExistingFiles=True
         shell: cmd
 
-      - name: Ensure repo Bin folder exists
+      - name: Ensure Bin folder exists
         run: |
-          if (-not (Test-Path -Path "SMSInterface\\Bin")) { New-Item -ItemType Directory -Path "SMSInterface\\Bin" | Out-Null }
+          if (-not (Test-Path -Path "SMSInterface\\Bin")) {
+            New-Item -ItemType Directory -Path "SMSInterface\\Bin" | Out-Null
+          }
         shell: pwsh
 
-      - name: Copy generated DLLs into SMSInterface/Bin (overwrite)
+      - name: Copy DLLs to Bin (skip existing)
         run: |
-          # Copy all DLLs from the published website bin (if present) and anywhere else found in PublishedWebsite
           $src1 = "PublishedWebsite\\bin"
           if (Test-Path $src1) {
             Get-ChildItem -Path $src1 -Filter *.dll -Recurse | ForEach-Object {
-              Copy-Item -Path $_.FullName -Destination "SMSInterface\\Bin" -Force
+              $targetPath = Join-Path "SMSInterface\\Bin" $_.Name
+              if (-not (Test-Path $targetPath)) {
+                Copy-Item -Path $_.FullName -Destination $targetPath
+                Write-Host "Added new DLL: $($_.Name)"
+              } else {
+                Write-Host "Skipped existing DLL: $($_.Name)"
+              }
             }
           }
-          # Also copy any dlls produced elsewhere in repo (fallback)
-          Get-ChildItem -Path "." -Filter *.dll -Recurse | Where-Object { $_.FullName -notlike "*\\.git\\*" } | ForEach-Object {
-            Copy-Item -Path $_.FullName -Destination "SMSInterface\\Bin" -Force
+          # fallback for any other DLLs found in the project
+          Get-ChildItem -Path . -Filter *.dll -Recurse | Where-Object { $_.FullName -notlike "*\\.git\\*" } | ForEach-Object {
+            $targetPath = Join-Path "SMSInterface\\Bin" $_.Name
+            if (-not (Test-Path $targetPath)) {
+              Copy-Item -Path $_.FullName -Destination $targetPath
+              Write-Host "Added extra DLL: $($_.Name)"
+            } else {
+              Write-Host "Skipped existing DLL: $($_.Name)"
+            }
           }
         shell: pwsh
 
-      - name: Show SMSInterface/Bin contents (for logs)
-        run: Get-ChildItem -Path "SMSInterface\\Bin" -Recurse | Select-Object FullName, Length
+      - name: Show DLLs in Bin
+        run: Get-ChildItem -Path "SMSInterface\\Bin" -Recurse | Select-Object Name, Length
         shell: pwsh
 
-      - name: Commit and push DLLs to master
+      - name: Commit and Push new DLLs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add SMSInterface/Bin
-          # commit only if there are changes
           $status = git status --porcelain
           if ($status) {
-            git commit -m "Update built DLLs in SMSInterface/Bin [skip ci]"
+            git commit -m "Add new DLLs to SMSInterface/Bin [skip ci]"
             git push origin HEAD:master
           } else {
-            Write-Host "No changes to commit."
+            Write-Host "No new DLLs to commit."
           }
         shell: pwsh
