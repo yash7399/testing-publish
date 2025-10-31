@@ -1,4 +1,4 @@
-name: Build Website and Add DLLs (No Overwrite)
+name: Build Website and Commit DLLs to New Branch
 
 on:
   push:
@@ -7,14 +7,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write    # allow pushing new branch
 
 jobs:
-  build-and-push:
+  build-and-commit:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout repository (with write access)
+      - name: Checkout repository (full history)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -23,62 +22,67 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build Website
+      - name: Build Website (website.publishproj)
         run: |
           msbuild "SMSInterface\\website.publishproj" ^
             /p:Configuration=Release ^
             /p:Platform="Any CPU" ^
-            /p:WebProjectOutputDir="PublishedWebsite\\" ^
+            /p:WebProjectOutputDir="$(Build.ArtifactStagingDirectory)\\PublishedWebsite\\" ^
             /p:DeleteExistingFiles=True
         shell: cmd
 
-      - name: Ensure Bin folder exists
+      - name: Create target dlls folder inside SMSInterface
         run: |
-          if (-not (Test-Path -Path "SMSInterface\\Bin")) {
-            New-Item -ItemType Directory -Path "SMSInterface\\Bin" | Out-Null
-          }
+          if (!(Test-Path -Path "SMSInterface\\dlls")) { New-Item -ItemType Directory -Path "SMSInterface\\dlls" | Out-Null }
         shell: pwsh
 
-      - name: Copy DLLs to Bin (skip existing)
+      - name: Copy all generated DLLs into SMSInterface/dlls
         run: |
-          $src1 = "PublishedWebsite\\bin"
-          if (Test-Path $src1) {
-            Get-ChildItem -Path $src1 -Filter *.dll -Recurse | ForEach-Object {
-              $targetPath = Join-Path "SMSInterface\\Bin" $_.Name
-              if (-not (Test-Path $targetPath)) {
-                Copy-Item -Path $_.FullName -Destination $targetPath
-                Write-Host "Added new DLL: $($_.Name)"
-              } else {
-                Write-Host "Skipped existing DLL: $($_.Name)"
-              }
-            }
+          # copy any found dll (from Bin, published website folder, etc.) into SMSInterface\dlls
+          Get-ChildItem -Path . -Filter *.dll -Recurse | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination "SMSInterface\\dlls" -Force
           }
-          # fallback for any other DLLs found in the project
-          Get-ChildItem -Path . -Filter *.dll -Recurse | Where-Object { $_.FullName -notlike "*\\.git\\*" } | ForEach-Object {
-            $targetPath = Join-Path "SMSInterface\\Bin" $_.Name
-            if (-not (Test-Path $targetPath)) {
-              Copy-Item -Path $_.FullName -Destination $targetPath
-              Write-Host "Added extra DLL: $($_.Name)"
-            } else {
-              Write-Host "Skipped existing DLL: $($_.Name)"
-            }
-          }
+          # show what got copied
+          Write-Host "Copied DLLs:"
+          Get-ChildItem -Path "SMSInterface\\dlls"
         shell: pwsh
 
-      - name: Show DLLs in Bin
-        run: Get-ChildItem -Path "SMSInterface\\Bin" -Recurse | Select-Object Name, Length
-        shell: pwsh
+      - name: Show git status (debug)
+        run: git status --porcelain && git rev-parse --abbrev-ref HEAD
 
-      - name: Commit and Push new DLLs
+      - name: Configure Git user
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add SMSInterface/Bin
-          $status = git status --porcelain
-          if ($status) {
-            git commit -m "Add new DLLs to SMSInterface/Bin [skip ci]"
-            git push origin HEAD:master
-          } else {
-            Write-Host "No new DLLs to commit."
+
+      - name: Create new branch and commit DLLs
+        id: commit
+        run: |
+          $branch = "add-dlls-" + (Get-Date).ToString("yyyyMMdd-HHmmss")
+          Write-Host "Creating branch: $branch"
+          # create and checkout new branch from current main
+          git checkout -b $branch
+          git add "SMSInterface/dlls"
+          $commitResult = ""
+          try {
+            git commit -m "Add built DLLs to SMSInterface/dlls [skip ci]" | Out-Null
+            $commitResult = "committed"
+          } catch {
+            Write-Host "No changes to commit"
+            $commitResult = "no-changes"
           }
+          Write-Host "Pushing branch $branch to origin"
+          git push origin "HEAD:refs/heads/$branch"
+          Write-Output "branch=$branch`nstatus=$commitResult" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
         shell: pwsh
+
+      - name: Upload DLLs as artifact (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-dlls
+          path: SMSInterface/dlls
+
+      - name: Print result
+        run: |
+          echo "New branch created: ${{ steps.commit.outputs.branch }}"
+          echo "Commit status: ${{ steps.commit.outputs.status }}"
