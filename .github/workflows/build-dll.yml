@@ -1,4 +1,4 @@
-name: Build and Publish DLLs
+name: Build and Publish DLLs (using publishproj)
 
 on:
   push:
@@ -14,27 +14,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history for branch creation
+          fetch-depth: 0
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build using website.publishproj
+      - name: Build website using publishproj
         run: |
-          echo "Building using website.publishproj..."
-          msbuild SMSInterface/website.publishproj /p:Configuration=Release /p:Platform="Any CPU" /t:Build /p:VisualStudioVersion=14.0
-          echo "✅ Build completed"
+          echo "🔧 Building using website.publishproj..."
+          msbuild "testing-publish\testing-publish.website.publishproj" ^
+            /p:Configuration=Release ^
+            /p:VisualStudioVersion=17.0 ^
+            /p:WebPublishTargetsVersion=17.0 ^
+            /p:VSToolsPath="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v17.0" ^
+            /p:DeployOnBuild=true /p:PublishProfile=Release
+        shell: cmd
 
-      - name: Find and copy generated DLLs into SMSInterface/dlls
+      - name: Copy generated DLLs into SMSInterface/dlls
         shell: pwsh
         run: |
-          $dllSource = Get-ChildItem -Path "SMSInterface" -Recurse -Include *.dll | Where-Object { $_.FullName -notmatch '\\obj\\' }
-          $dllTarget = "SMSInterface/dlls"
-          New-Item -ItemType Directory -Force -Path $dllTarget | Out-Null
-          foreach ($file in $dllSource) {
-            Copy-Item $file.FullName -Destination $dllTarget -Force
-          }
-          Write-Host "✅ Copied DLLs to $dllTarget"
+          $src = "testing-publish\testing-publish.publish\SMSInterface\bin"
+          $dest = "SMSInterface/dlls"
+          if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+          New-Item -ItemType Directory -Path $dest | Out-Null
+          Copy-Item "$src\*.dll" $dest -Force -Recurse
+          Write-Host "✅ Copied all DLLs to $dest"
 
       - name: Configure Git user
         run: |
@@ -42,6 +46,7 @@ jobs:
           git config user.name "GitHub Actions"
 
       - name: Create new branch from master and commit DLLs
+        shell: pwsh
         run: |
           $branchName = "dlls-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
           git fetch origin master
