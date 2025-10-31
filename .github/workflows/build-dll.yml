@@ -38,13 +38,16 @@ jobs:
 
       - name: Copy all generated DLLs into SMSInterface/dlls
         run: |
-          # copy any found dll (from Bin, published website folder, etc.) into SMSInterface\dlls
-          Get-ChildItem -Path . -Filter *.dll -Recurse | ForEach-Object {
-            Copy-Item -Path $_.FullName -Destination "SMSInterface\\dlls" -Force
+          $dest = "SMSInterface\\dlls"
+          # find all dlls but exclude any inside the dlls folder itself
+          Get-ChildItem -Path . -Filter *.dll -Recurse | Where-Object {
+            $_.FullName -notmatch [regex]::Escape($dest)
+          } | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination $dest -Force
           }
-          # show what got copied
-          Write-Host "Copied DLLs:"
-          Get-ChildItem -Path "SMSInterface\\dlls"
+
+          Write-Host "✅ Copied DLLs to $dest:"
+          Get-ChildItem -Path $dest
         shell: pwsh
 
       - name: Show git status (debug)
