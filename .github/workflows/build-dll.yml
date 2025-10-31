@@ -6,86 +6,47 @@ on:
       - master
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
-    name: Build ASP.NET Website and Commit DLLs
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository (full history)
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          persist-credentials: true
+          fetch-depth: 0   # full history for branch creation
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build Website (publish) using website.publishproj
-        shell: cmd
+      - name: Build using website.publishproj
         run: |
-          msbuild "SMSInterface\website.publishproj" ^
-            /p:Configuration=Release ^
-            /p:Platform="Any CPU" ^
-            /p:WebProjectOutputDir="$(Build.ArtifactStagingDirectory)\PublishedWebsite\" ^
-            /p:DeleteExistingFiles=True
+          echo "Building using website.publishproj..."
+          msbuild SMSInterface/website.publishproj /p:Configuration=Release /p:Platform="Any CPU" /t:Build /p:VisualStudioVersion=14.0
+          echo "✅ Build completed"
 
-      - name: Prepare destination folder SMSInterface/dlls
+      - name: Find and copy generated DLLs into SMSInterface/dlls
         shell: pwsh
         run: |
-          $dest = "SMSInterface/dlls"
-          if (Test-Path $dest) {
-            Remove-Item -Path $dest -Recurse -Force -ErrorAction SilentlyContinue
+          $dllSource = Get-ChildItem -Path "SMSInterface" -Recurse -Include *.dll | Where-Object { $_.FullName -notmatch '\\obj\\' }
+          $dllTarget = "SMSInterface/dlls"
+          New-Item -ItemType Directory -Force -Path $dllTarget | Out-Null
+          foreach ($file in $dllSource) {
+            Copy-Item $file.FullName -Destination $dllTarget -Force
           }
-          New-Item -ItemType Directory -Path $dest | Out-Null
-          Write-Host "Prepared $dest"
-
-      - name: Copy generated DLLs into SMSInterface/dlls (exclude destination)
-        shell: pwsh
-        run: |
-          $dest = "SMSInterface/dlls"
-          $destFull = (Resolve-Path $dest).Path
-          $dlls = Get-ChildItem -Path . -Filter *.dll -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch [regex]::Escape($destFull) }
-
-          if (-not $dlls) {
-            Write-Host "⚠️ No DLLs found to copy."
-            exit 0
-          }
-
-          foreach ($dll in $dlls) {
-            Copy-Item -Path $dll.FullName -Destination $dest -Force
-            Write-Host "Copied $($dll.FullName) → $dest"
-          }
-
-          Write-Host "✅ DLLs copied successfully into $dest"
+          Write-Host "✅ Copied DLLs to $dllTarget"
 
       - name: Configure Git user
-        shell: pwsh
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
 
       - name: Create new branch from master and commit DLLs
-        shell: pwsh
         run: |
-          git fetch origin master:refs/remotes/origin/master
-          $branch = "dlls-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-          git checkout -b $branch origin/master
-
-          git add --force "SMSInterface/dlls"
-          if (git diff --cached --quiet) {
-            Write-Host "⚠️ No new DLLs to commit."
-          } else {
-            git commit -m "Add compiled DLLs into SMSInterface/dlls [skip ci]"
-            git push -u origin $branch
-            Write-Host "✅ Pushed branch: $branch"
-          }
-
-      - name: Upload DLLs as artifact (optional)
-        uses: actions/upload-artifact@v4
-        with:
-          name: built-dlls
-          path: SMSInterface/dlls
+          $branchName = "dlls-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+          git fetch origin master
+          git checkout -b $branchName origin/master
+          git add SMSInterface/dlls
+          git commit -m "Add compiled DLLs [skip ci]" || echo "No changes to commit"
+          git push origin $branchName
+          Write-Host "✅ Pushed branch: $branchName"
