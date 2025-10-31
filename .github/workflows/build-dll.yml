@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Build Solution and Collect DLLs
+    name: Build ASP.NET Website and Collect DLLs
     runs-on: windows-latest
 
     steps:
@@ -18,21 +18,19 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Setup NuGet
-        uses: NuGet/setup-nuget@v2
-
-      - name: Restore NuGet packages
-        run: nuget restore SMSInterface.sln
-
-      - name: Build Solution
-        run: msbuild SMSInterface.sln /p:Configuration=Release /p:Platform="Any CPU"
+      - name: Build Website Project
+        run: |
+          msbuild "SMSInterface\\website.publishproj" ^
+            /p:Configuration=Release ^
+            /p:Platform="Any CPU" ^
+            /p:WebProjectOutputDir="$(Build.ArtifactStagingDirectory)\\PublishedWebsite\\" ^
+            /p:DeleteExistingFiles=True
+        shell: cmd
 
       - name: Create folder for DLLs
-        run: |
-          mkdir published_dlls
-          echo "DLL folder created"
+        run: mkdir published_dlls
 
-      - name: Copy all DLL files
+      - name: Copy all generated DLLs
         run: |
           Get-ChildItem -Path . -Filter *.dll -Recurse | ForEach-Object {
             Copy-Item $_.FullName published_dlls -Force
@@ -41,5 +39,5 @@ jobs:
       - name: Upload DLLs as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: compiled-dlls
+          name: built-dlls
           path: published_dlls
