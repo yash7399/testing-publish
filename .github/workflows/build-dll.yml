@@ -1,4 +1,4 @@
-name: Build and Commit DLLs (Website PublishProj)
+name: Build and Publish DLLs (Legacy ASP.NET Website)
 
 on:
   push:
@@ -9,38 +9,48 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Needed for branch creation
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: 'latest'
 
       - name: Build website using website.publishproj
+        run: msbuild "SMSInterface/website.publishproj" /p:Configuration=Release
+
+      - name: Precompile ASP.NET Website to generate DLLs
+        shell: pwsh
         run: |
-          msbuild "SMSInterface/website.publishproj" /p:Configuration=Release /p:OutputPath=SMSInterface\Bin
+          $vsTools = "C:\Program Files (x86)\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"
+          if (Test-Path $vsTools) {
+            cmd /c "`"$vsTools`" && aspnet_compiler -v / -p SMSInterface SMSInterface\Precompiled"
+          } else {
+            Write-Host "VS Developer Command not found. Trying direct aspnet_compiler..."
+            aspnet_compiler -v / -p SMSInterface SMSInterface\Precompiled
+          }
 
       - name: Prepare DLL folder
+        shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path "SMSInterface\dlls"
-          Copy-Item -Path "SMSInterface\Bin\*.dll" -Destination "SMSInterface\dlls" -Recurse -Force
-          Write-Host "✅ DLLs copied to SMSInterface/dlls"
+          New-Item -ItemType Directory -Force -Path "SMSInterface\dlls" | Out-Null
+          Copy-Item -Path "SMSInterface\Precompiled\Bin\*.dll" -Destination "SMSInterface\dlls" -Force
+          Write-Host "DLLs copied to SMSInterface/dlls"
 
       - name: Configure Git
         run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "github-actions"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
 
       - name: Create new branch and commit DLLs
+        shell: pwsh
         run: |
-          $branchName = "dlls-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-          git checkout -b $branchName
+          $branchName = "dlls_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+          git fetch origin master
+          git checkout -b $branchName origin/master
           git add SMSInterface/dlls/*.dll
-          git commit -m "Add compiled DLLs"
+          git commit -m "Add compiled DLLs from legacy ASP.NET Website"
           git push origin $branchName
-          Write-Host "✅ New branch $branchName created and pushed with DLLs"
