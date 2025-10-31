@@ -47,19 +47,20 @@ jobs:
         shell: pwsh
         run: |
           $dest = "SMSInterface/dlls"
-          # collect dlls from the published website folder and repo bin folders
-          $candidates = Get-ChildItem -Path . -Filter *.dll -Recurse -ErrorAction SilentlyContinue
-          $toCopy = $candidates | Where-Object { $_.FullName -notmatch [regex]::Escape((Resolve-Path $dest).Path) }
-          if (-not $toCopy) {
-            Write-Host "No DLLs found to copy."
+          $destFull = (Resolve-Path $dest).Path
+          $dlls = Get-ChildItem -Path . -Filter *.dll -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch [regex]::Escape($destFull) }
+
+          if (-not $dlls) {
+            Write-Host "⚠️ No DLLs found to copy."
             exit 0
           }
-          $toCopy | ForEach-Object {
-            Copy-Item -Path $_.FullName -Destination $dest -Force
-            Write-Host "Copied $($_.FullName) -> $dest"
+
+          foreach ($dll in $dlls) {
+            Copy-Item -Path $dll.FullName -Destination $dest -Force
+            Write-Host "Copied $($dll.FullName) → $dest"
           }
-          Write-Host "DLLs now in $dest:"
-          Get-ChildItem -Path $dest
+
+          Write-Host "✅ DLLs copied successfully into $dest"
 
       - name: Configure Git user
         shell: pwsh
@@ -70,21 +71,17 @@ jobs:
       - name: Create new branch from main and commit DLLs
         shell: pwsh
         run: |
-          # make sure main exists locally
           git fetch origin main:refs/remotes/origin/main
-
           $branch = "dlls-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-          Write-Host "Creating branch $branch from origin/main"
           git checkout -b $branch origin/main
 
           git add --force "SMSInterface/dlls"
-          $status = git status --porcelain
-          if (-not $status) {
-            Write-Host "No changes to commit (no dll changes)"
+          if (git diff --cached --quiet) {
+            Write-Host "⚠️ No new DLLs to commit."
           } else {
             git commit -m "Add compiled DLLs into SMSInterface/dlls [skip ci]"
             git push -u origin $branch
-            Write-Host "Pushed branch: $branch"
+            Write-Host "✅ Pushed branch: $branch"
           }
 
       - name: Upload DLLs as artifact (optional)
