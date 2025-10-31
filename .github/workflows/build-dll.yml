@@ -1,91 +1,77 @@
-name: Build Website and Commit DLLs to New Branch
+name: Build and Publish DLLs
 
 on:
   push:
     branches:
-      - master
+      - main
   workflow_dispatch:
 
-permissions:
-  contents: write    # allow pushing new branch
-
 jobs:
-  build-and-commit:
+  build:
     runs-on: windows-latest
+
     steps:
-      - name: Checkout repository (full history)
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          persist-credentials: true
+          fetch-depth: 0   # Full history required for new branch creation
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build Website (website.publishproj)
+      - name: Build Website (publish)
         run: |
-          msbuild "SMSInterface\\website.publishproj" ^
-            /p:Configuration=Release ^
-            /p:Platform="Any CPU" ^
-            /p:WebProjectOutputDir="$(Build.ArtifactStagingDirectory)\\PublishedWebsite\\" ^
-            /p:DeleteExistingFiles=True
-        shell: cmd
+          msbuild SMSInterface/SMSInterface.csproj /p:Configuration=Release /p:DeployOnBuild=true /p:OutputPath=publish
 
       - name: Create target dlls folder inside SMSInterface
         run: |
-          if (!(Test-Path -Path "SMSInterface\\dlls")) { New-Item -ItemType Directory -Path "SMSInterface\\dlls" | Out-Null }
-        shell: pwsh
+          New-Item -ItemType Directory -Force -Path SMSInterface/dlls
 
       - name: Copy all generated DLLs into SMSInterface/dlls
+        shell: pwsh
         run: |
-          $dest = "SMSInterface\\dlls"
-          # find all dlls but exclude any inside the dlls folder itself
+          $dest = "SMSInterface/dlls"
+
+          # Ensure folder exists
+          if (!(Test-Path $dest)) {
+            New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          }
+
+          # Clean old DLLs first
+          Get-ChildItem -Path $dest -Filter *.dll -Recurse | Remove-Item -Force -ErrorAction SilentlyContinue
+
+          # Copy new DLLs (excluding dlls folder itself)
           Get-ChildItem -Path . -Filter *.dll -Recurse | Where-Object {
             $_.FullName -notmatch [regex]::Escape($dest)
           } | ForEach-Object {
             Copy-Item -Path $_.FullName -Destination $dest -Force
           }
 
-          Write-Host "✅ Copied DLLs to $dest:"
+          Write-Host "✅ Copied DLLs to $dest"
           Get-ChildItem -Path $dest
-        shell: pwsh
 
       - name: Show git status (debug)
-        run: git status --porcelain && git rev-parse --abbrev-ref HEAD
+        run: git status
 
       - name: Configure Git user
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
 
       - name: Create new branch and commit DLLs
-        id: commit
-        run: |
-          $branch = "add-dlls-" + (Get-Date).ToString("yyyyMMdd-HHmmss")
-          Write-Host "Creating branch: $branch"
-          # create and checkout new branch from current main
-          git checkout -b $branch
-          git add "SMSInterface/dlls"
-          $commitResult = ""
-          try {
-            git commit -m "Add built DLLs to SMSInterface/dlls [skip ci]" | Out-Null
-            $commitResult = "committed"
-          } catch {
-            Write-Host "No changes to commit"
-            $commitResult = "no-changes"
-          }
-          Write-Host "Pushing branch $branch to origin"
-          git push origin "HEAD:refs/heads/$branch"
-          Write-Output "branch=$branch`nstatus=$commitResult" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
         shell: pwsh
+        run: |
+          $branchName = "dlls-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+          git checkout -b $branchName
+
+          git add SMSInterface/dlls/*.dll
+          git commit -m "Add latest DLLs from automated build"
+          git push origin $branchName
+
+          Write-Host "✅ New branch created and pushed: $branchName"
 
       - name: Upload DLLs as artifact (optional)
         uses: actions/upload-artifact@v4
         with:
           name: built-dlls
           path: SMSInterface/dlls
-
-      - name: Print result
-        run: |
-          echo "New branch created: ${{ steps.commit.outputs.branch }}"
-          echo "Commit status: ${{ steps.commit.outputs.status }}"
