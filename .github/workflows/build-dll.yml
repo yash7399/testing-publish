@@ -3,7 +3,109 @@ name: Build and Publish DLLs
 on:
   push:
     branches:
-      - master
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore CommonExtranet.sln
+
+      - name: Install .NET Framework 4.5.1 Targeting Pack
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://download.microsoft.com/download/3/F/0/3F0A8F24-AE29-4BA8-AE0F-03770C8E8B70/NDP451-KB2858728-x86-x64-AllOS-ENU.exe" -OutFile "dotnet451.exe"
+          Start-Process .\dotnet451.exe -ArgumentList "/q /norestart" -Wait
+
+      - name: Build solution
+        run: msbuild CommonExtranet.sln /p:Configuration=Release
+
+      - name: Collect DLL files
+        shell: pwsh
+        run: |
+          mkdir publish
+          Get-ChildItem -Path . -Recurse -Include *.dll | ForEach-Object {
+            Copy-Item $_.FullName -Destination ./publish -Force
+          }
+
+      - name: Upload DLLs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-dlls
+          path: publish/
+
+On Fri, Oct 31, 2025, 3:10 PM Yash Shukla <yash.shukla@ncdex.com> wrote:
+Run msbuild CommonExtranet.sln /p:Configuration=Release
+msbuild CommonExtranet.sln /p:Configuration=Release
+shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+env:
+NUGET: C:\hostedtoolcache\windows\nuget.exe\6.14.0\x64/nuget.exe
+MSBuild version 17.14.23+b0019275e for .NET Framework
+Build started 10/31/2025 9:39:51 AM.
+Project "D:\a\testing-publish\testing-publish\CommonExtranet.sln" on node 1 (default targets).
+ValidateSolutionConfiguration:
+Building solution configuration "Release|Mixed Platforms".
+Project "D:\a\testing-publish\testing-publish\CommonExtranet.sln" (1) is building "D:\a\testing-publish\testing-publish\SMSInterface.metaproj" (2) on node 1 (default targets).
+D:\a\testing-publish\testing-publish\SMSInterface.metaproj : warning MSB3030: Could not copy the file "D:\NCFE\NCFE - 3.5\Dev Code\Phase 3C\FCS\FCS\Bin\AjaxControlToolkit.dll" because it was not found.
+The previous error was converted to a warning because the task was called with ContinueOnError=true.
+Build continuing because "ContinueOnError" on the task "Copy" is set to "true".
+D:\a\testing-publish\testing-publish\SMSInterface.metaproj : error MSB3644: The reference assemblies for .NETFramework,Version=v4.5.1 were not found. To resolve this, install the Developer Pack (SDK/Targeting Pack) for this framework version or retarget your application. You can download .NET Framework Developer Packs at https://aka.ms/msbuild/developerpacks
+Done Building Project "D:\a\testing-publish\testing-publish\SMSInterface.metaproj" (default targets) -- FAILED.
+Done Building Project "D:\a\testing-publish\testing-publish\CommonExtranet.sln" (default targets) -- FAILED.
+Build FAILED.
+"D:\a\testing-publish\testing-publish\CommonExtranet.sln" (default target) (1) ->
+"D:\a\testing-publish\testing-publish\SMSInterface.metaproj" (default target) (2) ->
+(Build target) ->
+D:\a\testing-publish\testing-publish\SMSInterface.metaproj : warning MSB3030: Could not copy the file "D:\NCFE\NCFE - 3.5\Dev Code\Phase 3C\FCS\FCS\Bin\AjaxControlToolkit.dll" because it was not found.
+"D:\a\testing-publish\testing-publish\CommonExtranet.sln" (default target) (1) ->
+"D:\a\testing-publish\testing-publish\SMSInterface.metaproj" (default target) (2) ->
+(Build target) ->
+D:\a\testing-publish\testing-publish\SMSInterface.metaproj : error MSB3644: The reference assemblies for .NETFramework,Version=v4.5.1 were not found. To resolve this, install the Developer Pack (SDK/Targeting Pack) for this framework version or retarget your application. You can download .NET Framework Developer Packs at https://aka.ms/msbuild/developerpacks
+1 Warning(s)
+1 Error(s)
+Time Elapsed 00:00:01.77
+Error: Process completed with exit code 1.
+
+
+ 
+
+ 
+
+
+			
+Yash Shukla
+Intern
+National Commodity & Derivatives Exchange Limited   
+An ISO 27001:2022 certified organisation 
+	7814409381 / 
+	yash.shukla@ncdex.com /askus@ncdex.com
+	Toll-free number 1800 266 2339 / 1800 103 4861
+ 
+ 
+
+From: Yash Shukla <yashh3004@gmail.com>
+Sent: Friday, October 31, 2025 3:08 PM
+To: Yash Shukla <yash.shukla@ncdex.com>
+Subject: Re:
+ 
+name: Build and Publish DLLs
+
+on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
