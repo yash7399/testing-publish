@@ -3,8 +3,7 @@ name: Build and Publish DLLs
 on:
   push:
     branches:
-      - main
-	  - master
+      - master
   workflow_dispatch:
 
 jobs:
