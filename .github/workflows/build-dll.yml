@@ -3,11 +3,12 @@ name: Build and Publish DLLs
 on:
   push:
     branches:
-      - master    # 👈 Change to match your default branch
-  workflow_dispatch:  # allows manual run from Actions tab
+      - master
+  workflow_dispatch:
 
 jobs:
   build:
+    name: Build Solution and Collect DLLs
     runs-on: windows-latest
 
     steps:
@@ -21,28 +22,24 @@ jobs:
         uses: NuGet/setup-nuget@v2
 
       - name: Restore NuGet packages
-        run: nuget restore CommonExtranet.sln
+        run: nuget restore SMSInterface.sln
 
-      # Optional: install .NET Framework 4.8 targeting pack to avoid version issues
-      - name: Install .NET Framework 4.5 Developer Pack
-        shell: pwsh
+      - name: Build Solution
+        run: msbuild SMSInterface.sln /p:Configuration=Release /p:Platform="Any CPU"
+
+      - name: Create folder for DLLs
         run: |
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2088631" -OutFile "ndp48-devpack.exe"
-          Start-Process .\ndp48-devpack.exe -ArgumentList "/q /norestart" -Wait
+          mkdir published_dlls
+          echo "DLL folder created"
 
-      - name: Build solution
-        run: msbuild CommonExtranet.sln /p:Configuration=Release /p:Platform="Any CPU"
-
-      - name: Collect DLL files
-        shell: pwsh
+      - name: Copy all DLL files
         run: |
-          New-Item -ItemType Directory -Path publish -Force | Out-Null
-          Get-ChildItem -Path . -Recurse -Include *.dll | ForEach-Object {
-            Copy-Item $_.FullName -Destination ./publish -Force
+          Get-ChildItem -Path . -Filter *.dll -Recurse | ForEach-Object {
+            Copy-Item $_.FullName published_dlls -Force
           }
 
       - name: Upload DLLs as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: published-dlls
-          path: publish/
+          name: compiled-dlls
+          path: published_dlls
