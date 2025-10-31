@@ -24,7 +24,7 @@ jobs:
         run: nuget restore CommonExtranet.sln
 
       # Optional: install .NET Framework 4.8 targeting pack to avoid version issues
-      - name: Install .NET Framework 4.8 Developer Pack
+      - name: Install .NET Framework 4.5 Developer Pack
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2088631" -OutFile "ndp48-devpack.exe"
