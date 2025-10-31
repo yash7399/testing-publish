@@ -68,12 +68,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create new branch from main and commit DLLs
+      - name: Create new branch from master and commit DLLs
         shell: pwsh
         run: |
-          git fetch origin main:refs/remotes/origin/main
+          git fetch origin master:refs/remotes/origin/master
           $branch = "dlls-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-          git checkout -b $branch origin/main
+          git checkout -b $branch origin/master
 
           git add --force "SMSInterface/dlls"
           if (git diff --cached --quiet) {
