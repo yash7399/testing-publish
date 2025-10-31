@@ -32,9 +32,12 @@ jobs:
       - name: Collect DLLs
         shell: pwsh
         run: |
+          $srcFolder = "SMSInterface"
           $outFolder = "SMSInterface\dlls"
           New-Item -ItemType Directory -Force -Path $outFolder | Out-Null
-          Get-ChildItem -Path "SMSInterface" -Recurse -Include *.dll | Copy-Item -Destination $outFolder -Force
+          Get-ChildItem -Path $srcFolder -Recurse -Include *.dll |
+            Where-Object { $_.FullName -notlike "*\dlls\*" } |
+            Copy-Item -Destination $outFolder -Force
           Write-Host "✅ DLLs collected in $outFolder"
 
       - name: Configure Git
