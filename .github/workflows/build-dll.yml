@@ -20,6 +20,11 @@ jobs:
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
+      - name: Install .NET Framework 4.5.1 Developer Pack
+        run: |
+          Invoke-WebRequest -Uri "https://download.microsoft.com/download/2/3/3/233F0F3D-6A3B-4E3C-9E2F-0B7C6E0D8C6D/NDP451-DevPack-KB2872776-ENU.exe" -OutFile "dotnet451.exe"
+          Start-Process -FilePath "dotnet451.exe" -ArgumentList "/quiet" -Wait
+
       - name: Restore NuGet packages
         run: nuget restore ./CommonExtranet.sln
 
