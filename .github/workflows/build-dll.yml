@@ -3,7 +3,6 @@ name: Build and Publish DLLs
 on:
   push:
     branches:
-      - main
       - master
   workflow_dispatch:
 
@@ -12,7 +11,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup MSBuild
@@ -22,33 +21,22 @@ jobs:
         uses: NuGet/setup-nuget@v2
 
       - name: Restore NuGet packages
-        run: nuget restore TestWebApp.sln
+        run: nuget restore CommonExtranet.sln
 
       - name: Build solution
-        run: msbuild TestWebApp.sln /p:Configuration=Release
+        run: msbuild CommonExtranet.sln /p:Configuration=Release
 
       - name: Create publish folder
+        shell: pwsh
         run: |
           mkdir publish
-          # copy all DLLs to publish folder
+          # Copy all compiled DLLs from /bin folders
           Get-ChildItem -Path . -Recurse -Include *.dll | ForEach-Object {
             Copy-Item $_.FullName -Destination ./publish -Force
           }
 
-      - name: Upload DLLs as artifact (optional)
+      - name: Upload DLLs as artifact
         uses: actions/upload-artifact@v4
         with:
           name: published-dlls
           path: publish/
-
-      - name: Commit and push DLLs to main/publish folder
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git fetch
-          git checkout main
-          mkdir -p publish_output
-          Copy-Item -Path publish/* -Destination publish_output/ -Force
-          git add publish_output
-          git commit -m "Auto build DLLs"
-          git push
