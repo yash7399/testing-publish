@@ -1,9 +1,8 @@
-name: Build Individual DLLs (Fixed)
+name: Build and Publish DLLs (ASP.NET WebSite)
 
 on:
   push:
-    branches: [ master ]
-  workflow_dispatch:  # allows manual trigger
+    branches: [ main ]
 
 jobs:
   build:
@@ -16,57 +15,18 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Create DLL output folder
-        run: mkdir dll
+      - name: Restore NuGet (if any)
+        uses: NuGet/setup-nuget@v2
 
-      - name: Compile each .cs file into its own DLL (with fixed references)
-        shell: pwsh
+      - name: Build and publish website
         run: |
-          Write-Host "🔍 Searching for .cs files..."
-          $frameworkPath = "C:\Windows\Microsoft.NET\Framework\v4.0.30319"
-          $refAsmPath = "C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8"
+          msbuild website.publishproj /p:Configuration=Release /p:VisualStudioVersion=12.0
 
-          # Explicit framework references with full path
-          $references = @(
-              "$refAsmPath\System.dll",
-              "$refAsmPath\System.Core.dll",
-              "$refAsmPath\System.Data.dll",
-              "$refAsmPath\System.Web.dll",
-              "$refAsmPath\System.Xml.dll",
-              "$refAsmPath\System.Configuration.dll"
-          )
-
-          # Add DLLs from Bin if present
-          if (Test-Path "./Bin") {
-              $binDlls = Get-ChildItem -Path "./Bin" -Filter *.dll | ForEach-Object { $_.FullName }
-              $references += $binDlls
-          }
-
-          # Build compiler reference arguments correctly
-          $refArgs = ($references | ForEach-Object { "/reference:`"$_`"" }) -join " "
-
-          # Collect .cs files (ignore designer and assembly info)
-          $sourceFiles = Get-ChildItem -Path . -Recurse -Include *.cs |
-                         Where-Object { $_.Name -notmatch '\.designer\.cs$' -and $_.Name -ne 'AssemblyInfo.cs' }
-
-          Write-Host "📄 Found $($sourceFiles.Count) C# files to compile"
-
-          foreach ($file in $sourceFiles) {
-              $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
-              $dllPath = "dll/$dllName"
-              Write-Host "⚙️ Compiling $($file.FullName) -> $dllPath"
-              
-              & "$frameworkPath\csc.exe" /target:library /out:$dllPath $file.FullName $refArgs
-
-              if ($LASTEXITCODE -ne 0) {
-                  Write-Host "❌ Failed to compile $($file.Name)"
-              } else {
-                  Write-Host "✅ Successfully compiled $($file.Name)"
-              }
-          }
+      - name: Verify output
+        run: dir PrecompiledWeb\SMSInterface\bin
 
       - name: Upload generated DLLs
         uses: actions/upload-artifact@v4
         with:
-          name: individual-dlls
-          path: dll
+          name: compiled-dlls
+          path: PrecompiledWeb/SMSInterface/bin
