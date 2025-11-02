@@ -43,27 +43,68 @@ jobs:
         }
 
     # 🌐 Step 6: Precompile ASP.NET Web Forms site (for .aspx & .master)
-    - name: Precompile ASP.NET Website
+    - name: 🔧 Precompile .aspx and .cs files into DLLs
       shell: pwsh
       run: |
         $webRoot = "SMSInterface"
         $outPath = "precompiled"
         $frameworkDir = "C:\Windows\Microsoft.NET\Framework\v4.0.30319"
+    
+        # Ensure packages exist
+        if (-not (Test-Path "packages")) {
+          Write-Host "Restoring NuGet packages..."
+          & nuget restore "CommonExtranet.sln"
+        }
+    
+        # Locate System.Web.WebPages.dll
         $webPagesDll = (Get-ChildItem -Recurse "packages" | Where-Object { $_.Name -eq "System.Web.WebPages.dll" } | Select-Object -First 1).FullName
-
-        if (-not $webPagesDll) {
-          Write-Host "⚠️ Could not find System.Web.WebPages.dll in NuGet packages, skipping reference"
-          & "$frameworkDir\aspnet_compiler.exe" -v / -p $webRoot -f -u -fixednames -c "$outPath"
+        if ($webPagesDll) {
+          Write-Host "✅ Found System.Web.WebPages.dll at $webPagesDll"
+          
+          # Inject reference into web.config
+          $webConfigPath = Join-Path $webRoot "web.config"
+          $backupPath = "$webConfigPath.bak"
+          Copy-Item $webConfigPath $backupPath -Force
+          
+          [xml]$xml = Get-Content $webConfigPath
+          $runtimeNode = $xml.configuration.runtime
+          if (-not $runtimeNode) {
+            $runtimeNode = $xml.CreateElement("runtime")
+            $xml.configuration.AppendChild($runtimeNode) | Out-Null
+          }
+          $assemblyBinding = $xml.CreateElement("assemblyBinding", "urn:schemas-microsoft-com:asm.v1")
+          $dependentAssembly = $xml.CreateElement("dependentAssembly", "urn:schemas-microsoft-com:asm.v1")
+          $assemblyIdentity = $xml.CreateElement("assemblyIdentity", "urn:schemas-microsoft-com:asm.v1")
+          $assemblyIdentity.SetAttribute("name", "System.Web.WebPages")
+          $assemblyIdentity.SetAttribute("publicKeyToken", "31bf3856ad364e35")
+          $assemblyIdentity.SetAttribute("culture", "neutral")
+          $codeBase = $xml.CreateElement("codeBase", "urn:schemas-microsoft-com:asm.v1")
+          $codeBase.SetAttribute("version", "2.0.0.0")
+          $codeBase.SetAttribute("href", $webPagesDll)
+          $dependentAssembly.AppendChild($assemblyIdentity) | Out-Null
+          $dependentAssembly.AppendChild($codeBase) | Out-Null
+          $assemblyBinding.AppendChild($dependentAssembly) | Out-Null
+          $runtimeNode.AppendChild($assemblyBinding) | Out-Null
+          $xml.Save($webConfigPath)
         }
         else {
-          Write-Host "✅ Found System.Web.WebPages.dll at $webPagesDll"
-          & "$frameworkDir\aspnet_compiler.exe" -v / -p $webRoot -f -u -fixednames -c "$outPath" `
-            /a:"System.Web.WebPages=$webPagesDll" 2>&1 | Tee-Object -FilePath build_log.txt
+          Write-Host "⚠️ System.Web.WebPages.dll not found in NuGet packages. Compilation may fail."
         }
-
+    
+        # Run ASP.NET precompiler
+        & "$frameworkDir\aspnet_compiler.exe" -v / -p $webRoot -f -u -fixednames -c "$outPath"
+    
         if ($LASTEXITCODE -ne 0) {
-          Write-Host "⚠️ Some pages failed to compile. Check build_log.txt for details."
+          Write-Host "⚠️ Compilation failed. Check logs."
         }
+    
+        # Restore web.config
+        if (Test-Path $backupPath) {
+          Move-Item -Force $backupPath $webConfigPath
+        }
+    
+        Write-Host "✅ Compilation completed. DLLs generated in $outPath"
+
 
     # 📦 Step 7: Combine all DLLs into one folder
     - name: Collect all DLLs
