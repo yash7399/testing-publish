@@ -1,4 +1,4 @@
-name: Build Individual DLLs
+name: Build All DLLs (.cs + .aspx.cs)
 
 on:
   push:
@@ -16,23 +16,35 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Create output directory
-      run: mkdir dll
+    - name: Create output folders
+      run: |
+        mkdir dll
+        mkdir precompiled
 
-    - name: Compile each .cs file into separate DLL
+    - name: Compile independent .cs files (App_Code etc.)
       shell: pwsh
       run: |
         $srcPath = "SMSInterface"
         $outPath = "dll"
-        $files = Get-ChildItem -Path $srcPath -Recurse -Filter *.cs | Where-Object { $_.Name -notmatch "\.aspx\.cs$" -and $_.Name -ne "Global.asax.cs" }
+        $files = Get-ChildItem -Path $srcPath -Recurse -Filter *.cs | Where-Object { $_.FullName -notmatch "\.aspx\.cs$" -and $_.FullName -notmatch "\.master\.cs$" }
         foreach ($file in $files) {
           $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
-          Write-Host "Compiling $($file.FullName) to $dllName"
-          & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:library /out:"$outPath\$dllName" "$($file.FullName)"
+          Write-Host "Compiling independent file: $($file.FullName) -> $dllName"
+          & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:library /out:"$outPath\$dllName" "$($file.FullName)" 2>&1 | Write-Host
         }
 
-    - name: Upload DLLs as artifact
+    - name: Precompile ASP.NET website (for aspx/master files)
+      run: |
+        & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\aspnet_compiler.exe" -v / -p "SMSInterface" "precompiled"
+
+    - name: Collect all DLLs
+      run: |
+        mkdir all-dlls
+        copy dll\*.dll all-dlls\
+        copy precompiled\Bin\*.dll all-dlls\
+
+    - name: Upload all DLLs as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: individual-dlls
-        path: dll/
+        name: all-dlls
+        path: all-dlls/
