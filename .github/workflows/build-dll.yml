@@ -1,8 +1,9 @@
-name: Build Individual DLLs
+name: Build Individual DLLs (Fixed)
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
+  workflow_dispatch:  # allows manual trigger
 
 jobs:
   build:
@@ -18,15 +19,49 @@ jobs:
       - name: Create DLL output folder
         run: mkdir dll
 
-      - name: Compile each .cs file into its own DLL
+      - name: Compile each .cs file into its own DLL (with references)
         shell: pwsh
         run: |
-          $sourceFiles = Get-ChildItem -Path . -Recurse -Filter *.cs
+          Write-Host "🔍 Searching for .cs files..."
+          $frameworkPath = "C:\Windows\Microsoft.NET\Framework\v4.0.30319"
+
+          # List of system references to include
+          $references = @(
+              "System.dll",
+              "System.Core.dll",
+              "System.Data.dll",
+              "System.Web.dll",
+              "System.Xml.dll",
+              "System.Configuration.dll"
+          )
+
+          # Collect DLLs from /Bin folder (if any)
+          if (Test-Path "./Bin") {
+              $binDlls = Get-ChildItem -Path "./Bin" -Filter *.dll | ForEach-Object { $_.FullName }
+              $references += $binDlls
+          }
+
+          # Combine all references into compiler args
+          $refArgs = ($references | ForEach-Object { "/reference:`"$_`"" }) -join ' '
+
+          # Find all .cs files, excluding designer and AssemblyInfo files
+          $sourceFiles = Get-ChildItem -Path . -Recurse -Include *.cs |
+                         Where-Object { $_.Name -notmatch '\.designer\.cs$' -and $_.Name -ne 'AssemblyInfo.cs' }
+
+          Write-Host "📄 Found $($sourceFiles.Count) C# files to compile"
+
           foreach ($file in $sourceFiles) {
               $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
               $dllPath = "dll/$dllName"
-              Write-Host "Compiling $($file.FullName) -> $dllPath"
-              & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:library /out:$dllPath $file.FullName
+              Write-Host "⚙️ Compiling $($file.FullName) -> $dllPath"
+
+              & "$frameworkPath\csc.exe" /target:library /out:$dllPath $file.FullName $refArgs
+
+              if ($LASTEXITCODE -ne 0) {
+                  Write-Host "❌ Failed to compile $($file.Name)"
+              } else {
+                  Write-Host "✅ Successfully compiled $($file.Name)"
+              }
           }
 
       - name: Upload generated DLLs
