@@ -2,7 +2,7 @@ name: Build and Publish DLLs (ASP.NET WebSite)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   build:
