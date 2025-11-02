@@ -19,32 +19,33 @@ jobs:
       - name: Create DLL output folder
         run: mkdir dll
 
-      - name: Compile each .cs file into its own DLL (with references)
+      - name: Compile each .cs file into its own DLL (with fixed references)
         shell: pwsh
         run: |
           Write-Host "🔍 Searching for .cs files..."
           $frameworkPath = "C:\Windows\Microsoft.NET\Framework\v4.0.30319"
+          $refAsmPath = "C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8"
 
-          # List of system references to include
+          # Explicit framework references with full path
           $references = @(
-              "System.dll",
-              "System.Core.dll",
-              "System.Data.dll",
-              "System.Web.dll",
-              "System.Xml.dll",
-              "System.Configuration.dll"
+              "$refAsmPath\System.dll",
+              "$refAsmPath\System.Core.dll",
+              "$refAsmPath\System.Data.dll",
+              "$refAsmPath\System.Web.dll",
+              "$refAsmPath\System.Xml.dll",
+              "$refAsmPath\System.Configuration.dll"
           )
 
-          # Collect DLLs from /Bin folder (if any)
+          # Add DLLs from Bin if present
           if (Test-Path "./Bin") {
               $binDlls = Get-ChildItem -Path "./Bin" -Filter *.dll | ForEach-Object { $_.FullName }
               $references += $binDlls
           }
 
-          # Combine all references into compiler args
-          $refArgs = ($references | ForEach-Object { "/reference:`"$_`"" }) -join ' '
+          # Build compiler reference arguments correctly
+          $refArgs = ($references | ForEach-Object { "/reference:`"$_`"" }) -join " "
 
-          # Find all .cs files, excluding designer and AssemblyInfo files
+          # Collect .cs files (ignore designer and assembly info)
           $sourceFiles = Get-ChildItem -Path . -Recurse -Include *.cs |
                          Where-Object { $_.Name -notmatch '\.designer\.cs$' -and $_.Name -ne 'AssemblyInfo.cs' }
 
@@ -54,7 +55,7 @@ jobs:
               $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
               $dllPath = "dll/$dllName"
               Write-Host "⚙️ Compiling $($file.FullName) -> $dllPath"
-
+              
               & "$frameworkPath\csc.exe" /target:library /out:$dllPath $file.FullName $refArgs
 
               if ($LASTEXITCODE -ne 0) {
