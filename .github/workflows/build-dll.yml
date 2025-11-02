@@ -10,27 +10,18 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # 🧱 Step 1: Checkout code
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 🧰 Step 2: Setup MSBuild
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    # 📦 Step 3: Install missing ASP.NET assemblies (WebPages, Razor, MVC)
-    - name: Install ASP.NET assemblies
-      run: nuget install Microsoft.AspNet.WebPages -Version 2.0.30506 -OutputDirectory packages
-
-    # 📂 Step 4: Create output directories
     - name: Create output folders
       run: |
         mkdir dll
         mkdir precompiled
-        mkdir all-dlls
 
-    # ⚙️ Step 5: Compile all independent .cs files into separate DLLs
-    - name: Compile individual .cs files
+    - name: Compile independent .cs files (App_Code etc.)
       shell: pwsh
       run: |
         $srcPath = "SMSInterface"
@@ -38,81 +29,27 @@ jobs:
         $files = Get-ChildItem -Path $srcPath -Recurse -Filter *.cs | Where-Object { $_.FullName -notmatch "\.aspx\.cs$" -and $_.FullName -notmatch "\.master\.cs$" }
         foreach ($file in $files) {
           $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
-          Write-Host "🧩 Compiling independent file: $($file.FullName) -> $dllName"
+          Write-Host "Compiling independent file: $($file.FullName) -> $dllName"
           & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:library /out:"$outPath\$dllName" "$($file.FullName)" 2>&1 | Write-Host
         }
 
-    # 🌐 Step 6: Precompile ASP.NET Web Forms site (for .aspx & .master)
-    - name: 🔧 Precompile .aspx and .cs files into DLLs
+    - name: Precompile ASP.NET website (detailed logging)
       shell: pwsh
       run: |
-        $webRoot = "SMSInterface"
-        $outPath = "precompiled"
-        $frameworkDir = "C:\Windows\Microsoft.NET\Framework\v4.0.30319"
-    
-        # Ensure packages exist
-        if (-not (Test-Path "packages")) {
-          Write-Host "Restoring NuGet packages..."
-          & nuget restore "CommonExtranet.sln"
-        }
-    
-        # Locate System.Web.WebPages.dll
-        $webPagesDll = (Get-ChildItem -Recurse "packages" | Where-Object { $_.Name -eq "System.Web.WebPages.dll" } | Select-Object -First 1).FullName
-        if ($webPagesDll) {
-          Write-Host "✅ Found System.Web.WebPages.dll at $webPagesDll"
-          
-          # Inject reference into web.config
-          $webConfigPath = Join-Path $webRoot "web.config"
-          $backupPath = "$webConfigPath.bak"
-          Copy-Item $webConfigPath $backupPath -Force
-          
-          [xml]$xml = Get-Content $webConfigPath
-          $runtimeNode = $xml.configuration.runtime
-          if (-not $runtimeNode) {
-            $runtimeNode = $xml.CreateElement("runtime")
-            $xml.configuration.AppendChild($runtimeNode) | Out-Null
-          }
-          $assemblyBinding = $xml.CreateElement("assemblyBinding", "urn:schemas-microsoft-com:asm.v1")
-          $dependentAssembly = $xml.CreateElement("dependentAssembly", "urn:schemas-microsoft-com:asm.v1")
-          $assemblyIdentity = $xml.CreateElement("assemblyIdentity", "urn:schemas-microsoft-com:asm.v1")
-          $assemblyIdentity.SetAttribute("name", "System.Web.WebPages")
-          $assemblyIdentity.SetAttribute("publicKeyToken", "31bf3856ad364e35")
-          $assemblyIdentity.SetAttribute("culture", "neutral")
-          $codeBase = $xml.CreateElement("codeBase", "urn:schemas-microsoft-com:asm.v1")
-          $codeBase.SetAttribute("version", "2.0.0.0")
-          $codeBase.SetAttribute("href", $webPagesDll)
-          $dependentAssembly.AppendChild($assemblyIdentity) | Out-Null
-          $dependentAssembly.AppendChild($codeBase) | Out-Null
-          $assemblyBinding.AppendChild($dependentAssembly) | Out-Null
-          $runtimeNode.AppendChild($assemblyBinding) | Out-Null
-          $xml.Save($webConfigPath)
-        }
-        else {
-          Write-Host "⚠️ System.Web.WebPages.dll not found in NuGet packages. Compilation may fail."
-        }
-    
-        # Run ASP.NET precompiler
-        & "$frameworkDir\aspnet_compiler.exe" -v / -p $webRoot -f -u -fixednames -c "$outPath"
-    
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "⚠️ Compilation failed. Check logs."
-        }
-    
-        # Restore web.config
-        if (Test-Path $backupPath) {
-          Move-Item -Force $backupPath $webConfigPath
-        }
-    
-        Write-Host "✅ Compilation completed. DLLs generated in $outPath"
+        Write-Host "Starting ASP.NET precompilation..."
+        $proc = Start-Process -FilePath "C:\Windows\Microsoft.NET\Framework\v4.0.30319\aspnet_compiler.exe" `
+            -ArgumentList @("-v","/","-p","SMSInterface","precompiled","-errorstack","-fixednames","-nologo") `
+            -Wait -NoNewWindow -PassThru -RedirectStandardOutput "precompile.log" -RedirectStandardError "precompile.err"
+        Write-Host "Exit code: $($proc.ExitCode)"
+        Get-Content precompile.log
+        Get-Content precompile.err
 
-
-    # 📦 Step 7: Combine all DLLs into one folder
     - name: Collect all DLLs
       run: |
-        copy dll\*.dll all-dlls\ || echo "No standalone DLLs found"
-        copy precompiled\Bin\*.dll all-dlls\ || echo "No precompiled DLLs found"
+        mkdir all-dlls
+        copy dll\*.dll all-dlls\
+        copy precompiled\Bin\*.dll all-dlls\
 
-    # ⬆️ Step 8: Upload DLLs as build artifact
     - name: Upload all DLLs as artifact
       uses: actions/upload-artifact@v4
       with:
