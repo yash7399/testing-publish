@@ -16,41 +16,68 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
+    # 1️⃣ Create folders
     - name: Create output folders
       run: |
         mkdir dll
         mkdir precompiled
 
-    - name: Compile independent .cs files (App_Code etc.)
+    # 2️⃣ Compile standalone .cs files (like App_Code)
+    - name: Compile independent .cs files
       shell: pwsh
       run: |
+        Write-Host "🔹 Compiling standalone .cs files..."
         $srcPath = "SMSInterface"
         $outPath = "dll"
         $files = Get-ChildItem -Path $srcPath -Recurse -Filter *.cs | Where-Object { $_.FullName -notmatch "\.aspx\.cs$" -and $_.FullName -notmatch "\.master\.cs$" }
         foreach ($file in $files) {
           $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
-          Write-Host "Compiling independent file: $($file.FullName) -> $dllName"
+          Write-Host "Compiling: $($file.FullName) → $dllName"
           & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:library /out:"$outPath\$dllName" "$($file.FullName)" 2>&1 | Write-Host
         }
 
+    # 3️⃣ Precompile the ASP.NET site (for .aspx and .master files)
     - name: Precompile ASP.NET website (detailed logging)
       shell: pwsh
       run: |
-        Write-Host "Starting ASP.NET precompilation..."
-        $proc = Start-Process -FilePath "C:\Windows\Microsoft.NET\Framework\v4.0.30319\aspnet_compiler.exe" `
-            -ArgumentList @("-v","/","-p","SMSInterface","precompiled","-errorstack","-fixednames","-nologo") `
-            -Wait -NoNewWindow -PassThru -RedirectStandardOutput "precompile.log" -RedirectStandardError "precompile.err"
-        Write-Host "Exit code: $($proc.ExitCode)"
+        Write-Host "🔹 Starting ASP.NET precompilation..."
+        $outDir = "precompiled"
+        if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
+
+        $args = @(
+          "-v", "/",
+          "-p", "SMSInterface",
+          "precompiled",
+          "-errorstack",
+          "-fixednames",
+          "-nologo"
+        )
+
+        $compiler = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\aspnet_compiler.exe"
+        Write-Host "Running: $compiler $args"
+        & $compiler @args 2>&1 | Tee-Object -FilePath "precompile.log"
+        Write-Host "===== Compiler Log Start ====="
         Get-Content precompile.log
-        Get-Content precompile.err
+        Write-Host "===== Compiler Log End ====="
 
-    - name: Collect all DLLs
+    # 4️⃣ Collect all DLLs together
+    - name: Collect all DLLs (safe copy)
+      shell: pwsh
       run: |
+        Write-Host "🔹 Collecting all DLLs..."
         mkdir all-dlls
-        copy dll\*.dll all-dlls\
-        copy precompiled\Bin\*.dll all-dlls\
+        if (Test-Path dll) {
+          Copy-Item dll\*.dll all-dlls\
+        }
+        if (Test-Path precompiled\Bin) {
+          Copy-Item precompiled\Bin\*.dll all-dlls\
+        } else {
+          Write-Warning "⚠️ No precompiled\Bin folder found — skipping."
+        }
+        Write-Host "✅ DLL collection complete."
 
-    - name: Upload all DLLs as artifact
+    # 5️⃣ Upload the compiled DLLs as artifacts
+    - name: Upload DLLs as artifact
       uses: actions/upload-artifact@v4
       with:
         name: all-dlls
