@@ -1,8 +1,9 @@
-name: Build All DLLs (.cs + .aspx.cs)
+name: Build ASP.NET DLLs
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - master
   workflow_dispatch:
 
 jobs:
@@ -10,75 +11,76 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-    # 1️⃣ Create folders
-    - name: Create output folders
-      run: |
-        mkdir dll
-        mkdir precompiled
+      - name: Restore NuGet packages
+        run: nuget restore CommonExtranet.sln
 
-    # 2️⃣ Compile standalone .cs files (like App_Code)
-    - name: Compile independent .cs files
-      shell: pwsh
-      run: |
-        Write-Host "🔹 Compiling standalone .cs files..."
-        $srcPath = "SMSInterface"
-        $outPath = "dll"
-        $files = Get-ChildItem -Path $srcPath -Recurse -Filter *.cs | Where-Object { $_.FullName -notmatch "\.aspx\.cs$" -and $_.FullName -notmatch "\.master\.cs$" }
-        foreach ($file in $files) {
-          $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
-          Write-Host "Compiling: $($file.FullName) → $dllName"
-          & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:library /out:"$outPath\$dllName" "$($file.FullName)" 2>&1 | Write-Host
-        }
+      # 🧱 Step 1: Precompile ASP.NET website
+      - name: Precompile ASP.NET website (with WebPages reference)
+        shell: pwsh
+        run: |
+          Write-Host "🔹 Starting ASP.NET precompilation..."
+          $outDir = "precompiled"
+          if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
 
-    # 3️⃣ Precompile the ASP.NET site (for .aspx and .master files)
-    - name: Precompile ASP.NET website (detailed logging)
-      shell: pwsh
-      run: |
-        Write-Host "🔹 Starting ASP.NET precompilation..."
-        $outDir = "precompiled"
-        if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
+          $compiler = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\aspnet_compiler.exe"
 
-        $args = @(
-          "-v", "/",
-          "-p", "SMSInterface",
-          "precompiled",
-          "-errorstack",
-          "-fixednames",
-          "-nologo"
-        )
+          # Explicit references to avoid 'WebPages' and 'Razor' errors
+          $webpagesDll = "C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Web.WebPages\v4.0_3.0.0.0__31bf3856ad364e35\System.Web.WebPages.dll"
+          $mvcDll = "C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Web.Mvc\v4.0_5.2.0.0__31bf3856ad364e35\System.Web.Mvc.dll"
+          $razorDll = "C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Web.Razor\v4.0_3.0.0.0__31bf3856ad364e35\System.Web.Razor.dll"
 
-        $compiler = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\aspnet_compiler.exe"
-        Write-Host "Running: $compiler $args"
-        & $compiler @args 2>&1 | Tee-Object -FilePath "precompile.log"
-        Write-Host "===== Compiler Log Start ====="
-        Get-Content precompile.log
-        Write-Host "===== Compiler Log End ====="
+          $args = @(
+            "-v", "/",
+            "-p", "SMSInterface",
+            "precompiled",
+            "/reference:$webpagesDll",
+            "/reference:$mvcDll",
+            "/reference:$razorDll",
+            "-errorstack",
+            "-fixednames",
+            "-nologo"
+          )
 
-    # 4️⃣ Collect all DLLs together
-    - name: Collect all DLLs (safe copy)
-      shell: pwsh
-      run: |
-        Write-Host "🔹 Collecting all DLLs..."
-        mkdir all-dlls
-        if (Test-Path dll) {
-          Copy-Item dll\*.dll all-dlls\
-        }
-        if (Test-Path precompiled\Bin) {
-          Copy-Item precompiled\Bin\*.dll all-dlls\
-        } else {
-          Write-Warning "⚠️ No precompiled\Bin folder found — skipping."
-        }
-        Write-Host "✅ DLL collection complete."
+          Write-Host "Running: $compiler $($args -join ' ')"
+          & $compiler @args 2>&1 | Tee-Object -FilePath "precompile.log"
 
-    # 5️⃣ Upload the compiled DLLs as artifacts
-    - name: Upload DLLs as artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: all-dlls
-        path: all-dlls/
+          Write-Host "===== Compiler Log Start ====="
+          Get-Content precompile.log
+          Write-Host "===== Compiler Log End ====="
+
+      # 🧱 Step 2: Build the project (to ensure .cs files compile to DLLs)
+      - name: Build website.publishproj
+        run: msbuild SMSInterface/website.publishproj /p:Configuration=Release /p:VisualStudioVersion=12.0
+
+      # 🧱 Step 3: Gather all DLLs
+      - name: Collect all DLLs
+        shell: pwsh
+        run: |
+          Write-Host "🔹 Collecting DLLs..."
+          $allDlls = "all-dlls"
+          if (Test-Path $allDlls) { Remove-Item -Recurse -Force $allDlls }
+          New-Item -ItemType Directory -Path $allDlls | Out-Null
+
+          if (Test-Path "SMSInterface\Bin") {
+            Copy-Item "SMSInterface\Bin\*.dll" $allDlls -ErrorAction SilentlyContinue
+          }
+
+          if (Test-Path "precompiled\Bin") {
+            Copy-Item "precompiled\Bin\*.dll" $allDlls -ErrorAction SilentlyContinue
+          }
+
+          Write-Host "✅ DLLs collected in: $allDlls"
+          Get-ChildItem $allDlls
+
+      # 🧱 Step 4: Upload DLLs as artifact
+      - name: Upload DLL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-dlls
+          path: all-dlls/
