@@ -2,7 +2,7 @@ name: Build Individual DLLs (Fixed)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch:  # allows manual trigger
 
 jobs:
