@@ -33,20 +33,9 @@ jobs:
           & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:library /out:"$outPath\$dllName" "$($file.FullName)" 2>&1 | Write-Host
         }
 
-    - name: Precompile ASP.NET website (detailed logging)
-      shell: pwsh
+    - name: Precompile ASP.NET website (for aspx/master files)
       run: |
-        Write-Host "Starting ASP.NET precompilation..."
-        $exe = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\aspnet_compiler.exe"
-        $args = @("-v","/","-p","SMSInterface","precompiled","-errorstack","-fixednames","-nologo")
-        $process = Start-Process -FilePath $exe -ArgumentList $args -Wait -PassThru -RedirectStandardOutput "precompile.log" -RedirectStandardError "precompile.err"
-        Write-Host "Exit code: $($process.ExitCode)"
-        Write-Host "==== STDOUT ===="
-        Get-Content precompile.log
-        Write-Host "==== STDERR ===="
-        Get-Content precompile.err
-
-
+        & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\aspnet_compiler.exe" -v / -p "SMSInterface" "precompiled"
 
     - name: Collect all DLLs
       run: |
