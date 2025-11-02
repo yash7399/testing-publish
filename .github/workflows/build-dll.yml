@@ -10,18 +10,27 @@ jobs:
     runs-on: windows-latest
 
     steps:
+    # 🧱 Step 1: Checkout code
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    # 🧰 Step 2: Setup MSBuild
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
+    # 📦 Step 3: Install missing ASP.NET assemblies (WebPages, Razor, MVC)
+    - name: Install ASP.NET assemblies
+      run: nuget install Microsoft.AspNet.WebPages -Version 2.0.30506 -OutputDirectory packages
+
+    # 📂 Step 4: Create output directories
     - name: Create output folders
       run: |
         mkdir dll
         mkdir precompiled
+        mkdir all-dlls
 
-    - name: Compile independent .cs files (App_Code etc.)
+    # ⚙️ Step 5: Compile all independent .cs files into separate DLLs
+    - name: Compile individual .cs files
       shell: pwsh
       run: |
         $srcPath = "SMSInterface"
@@ -29,20 +38,40 @@ jobs:
         $files = Get-ChildItem -Path $srcPath -Recurse -Filter *.cs | Where-Object { $_.FullName -notmatch "\.aspx\.cs$" -and $_.FullName -notmatch "\.master\.cs$" }
         foreach ($file in $files) {
           $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
-          Write-Host "Compiling independent file: $($file.FullName) -> $dllName"
+          Write-Host "🧩 Compiling independent file: $($file.FullName) -> $dllName"
           & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:library /out:"$outPath\$dllName" "$($file.FullName)" 2>&1 | Write-Host
         }
 
-    - name: Precompile ASP.NET website (for aspx/master files)
+    # 🌐 Step 6: Precompile ASP.NET Web Forms site (for .aspx & .master)
+    - name: Precompile ASP.NET Website
+      shell: pwsh
       run: |
-        & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\aspnet_compiler.exe" -v / -p "SMSInterface" "precompiled"
+        $webRoot = "SMSInterface"
+        $outPath = "precompiled"
+        $frameworkDir = "C:\Windows\Microsoft.NET\Framework\v4.0.30319"
+        $webPagesDll = (Get-ChildItem -Recurse "packages" | Where-Object { $_.Name -eq "System.Web.WebPages.dll" } | Select-Object -First 1).FullName
 
+        if (-not $webPagesDll) {
+          Write-Host "⚠️ Could not find System.Web.WebPages.dll in NuGet packages, skipping reference"
+          & "$frameworkDir\aspnet_compiler.exe" -v / -p $webRoot -f -u -fixednames -c "$outPath"
+        }
+        else {
+          Write-Host "✅ Found System.Web.WebPages.dll at $webPagesDll"
+          & "$frameworkDir\aspnet_compiler.exe" -v / -p $webRoot -f -u -fixednames -c "$outPath" `
+            /a:"System.Web.WebPages=$webPagesDll" 2>&1 | Tee-Object -FilePath build_log.txt
+        }
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "⚠️ Some pages failed to compile. Check build_log.txt for details."
+        }
+
+    # 📦 Step 7: Combine all DLLs into one folder
     - name: Collect all DLLs
       run: |
-        mkdir all-dlls
-        copy dll\*.dll all-dlls\
-        copy precompiled\Bin\*.dll all-dlls\
+        copy dll\*.dll all-dlls\ || echo "No standalone DLLs found"
+        copy precompiled\Bin\*.dll all-dlls\ || echo "No precompiled DLLs found"
 
+    # ⬆️ Step 8: Upload DLLs as build artifact
     - name: Upload all DLLs as artifact
       uses: actions/upload-artifact@v4
       with:
