@@ -14,10 +14,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup MSBuild (VS 2013)
+      - name: Setup MSBuild (VS 2019)
         uses: microsoft/setup-msbuild@v2
         with:
-          vs-version: '[12.0,13.0)'
+          vs-version: '[16.0,17.0)'
 
       - name: Create output folder
         run: mkdir SMSInterface\dlls
