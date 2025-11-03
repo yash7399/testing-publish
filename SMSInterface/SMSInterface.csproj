@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net451</TargetFramework>
+    <RootNamespace>SMSInterface</RootNamespace>
+    <AssemblyName>SMSInterface</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Web.Razor" />
+    <Reference Include="System.Web.WebPages" />
+    <Reference Include="System.Web.WebPages.Deployment" />
+    <Reference Include="System.Web.WebPages.Razor" />
+    <Reference Include="System.Web.Helpers" />
+    <Reference Include="System.Web.Mvc" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+
+</Project>
