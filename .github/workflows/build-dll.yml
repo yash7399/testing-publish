@@ -2,8 +2,7 @@ name: Build and Publish DLLs
 
 on:
   push:
-    branches:
-      - master
+    branches: [ master ]
   workflow_dispatch:
 
 jobs:
@@ -14,6 +13,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install .NET Framework 4.5.1 targeting pack
+        run: |
+          choco install netfx-4.5.1-devpack -y
+
       - name: Setup MSBuild (VS 2022)
         uses: microsoft/setup-msbuild@v2
         with:
@@ -21,14 +24,14 @@ jobs:
           msbuild-architecture: x86
 
       - name: Verify MSBuild path
-        run: |
-          where msbuild
+        run: where msbuild
 
       - name: Create output folder
         run: mkdir SMSInterface\dlls
 
-      - name: Build solution
-        run: msbuild CommonExtranet.sln /p:Configuration=Release /p:Platform="Any CPU"
+      - name: Build solution (without publish profile)
+        run: |
+          msbuild CommonExtranet.sln /p:Configuration=Release /p:Platform="Any CPU" /p:DeployOnBuild=false /p:PublishProfile=""
 
       - name: Compile each .cs file into separate DLL
         run: |
