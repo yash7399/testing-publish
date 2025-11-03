@@ -1,10 +1,10 @@
-name: Build and Commit DLLs (C# Compiler)
+name: Build 12 DLLs and Commit
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
-  workflow_dispatch:
 
 jobs:
   build:
@@ -14,41 +14,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET Framework Compiler
+      - name: Setup MSBuild (VS 2013)
+        uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: '[12.0,13.0)'
+
+      - name: Create output folder
+        run: mkdir SMSInterface\dlls
+
+      - name: Build solution
+        run: msbuild CommonExtranet.sln /p:Configuration=Release /p:TargetFrameworkVersion=v4.5.1
+
+      - name: Compile each .cs file into separate DLL
         shell: pwsh
         run: |
-          $sdk = "C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319"
-          echo "CSC_PATH=$sdk\\csc.exe" >> $env:GITHUB_ENV
-
-      - name: Build all .cs files into DLLs
-        shell: pwsh
-        run: |
-          $dllFolder = "SMSInterface\\dlls"
-          if (!(Test-Path $dllFolder)) { New-Item -ItemType Directory -Path $dllFolder | Out-Null }
-
-          $csFiles = Get-ChildItem -Path "SMSInterface" -Filter "*.cs"
-          foreach ($file in $csFiles) {
-              $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
-              & $env:CSC_PATH /target:library /out:"$dllFolder\\$dllName" "$($file.FullName)"
+          $srcPath = "SMSInterface\\App_Code"
+          $outPath = "SMSInterface\\dlls"
+          $refs = @(
+            "System.dll",
+            "System.Web.dll",
+            "System.Configuration.dll",
+            "Microsoft.VisualBasic.dll"
+          ) -join ","
+          Get-ChildItem $srcPath -Filter "*.cs" | ForEach-Object {
+            $name = [IO.Path]::GetFileNameWithoutExtension($_.Name)
+            Write-Host "Compiling $name.dll"
+            csc /target:library /out:"$outPath\\$name.dll" /reference:$refs "$($_.FullName)"
           }
 
-          Write-Host "✅ DLLs generated in $dllFolder"
-
-      - name: Verify generated DLLs
-        shell: pwsh
+      - name: Create new branch for DLLs
+        shell: bash
         run: |
-          Write-Host "Generated DLLs:"
-          Get-ChildItem "SMSInterface\\dlls\\*.dll"
-
-      - name: Commit DLLs to new branch
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          timestamp=$(date +"%Y%m%d-%H%M%S")
-          branch="dll-build-$timestamp"
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
+          branch="dll-build-$(date +'%Y%m%d-%H%M')"
           git checkout -b "$branch"
-          git add SMSInterface/dlls
-          git commit -m "Add compiled DLLs - $timestamp"
+          git add SMSInterface/dlls/*.dll
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git commit -m "Add compiled DLLs"
           git push origin "$branch"
