@@ -1,86 +1,156 @@
-name: Build ASP.NET DLLs
+name: Build each .cs → .dll
 
 on:
   push:
-    branches:
-      - master
-  workflow_dispatch:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
 
 jobs:
-  build:
-    runs-on: windows-latest
+  compile:
+    runs-on: windows-latest   # Windows runner has MSBuild & .NET SDK pre-installed
 
     steps:
+      # -------------------------------------------------
+      # 1. Checkout code
+      # -------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+      # -------------------------------------------------
+      # 2. Install .NET SDK (covers .NET Framework via `msbuild`)
+      # -------------------------------------------------
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'   # any recent version works for msbuild
 
-      - name: Restore NuGet packages
-        run: nuget restore CommonExtranet.sln
-
-      # 🧱 Step 1: Precompile ASP.NET website
-      - name: Precompile ASP.NET website (with WebPages reference)
+      # -------------------------------------------------
+      # 3. Find every .cs file
+      # -------------------------------------------------
+      - name: List .cs files
+        id: csfiles
         shell: pwsh
         run: |
-          Write-Host "🔹 Starting ASP.NET precompilation..."
-          $outDir = "precompiled"
-          if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
+          $files = Get-ChildItem -Path . -Recurse -Filter *.cs | 
+                   Sort-Object FullName |
+                   ForEach-Object { $_.FullName.Substring($PWD.Path.Length+1) }
+          $json = $files | ConvertTo-Json -Compress
+          echo "CS_FILES=$json" >> $env:GITHUB_OUTPUT
+          echo "Found $($files.Count) .cs file(s)"
 
-          $compiler = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\aspnet_compiler.exe"
+      # -------------------------------------------------
+      # 4. Prepare output folder
+      # -------------------------------------------------
+      - name: Create artifacts folder
+        run: mkdir artifacts
 
-          # Explicit references to avoid 'WebPages' and 'Razor' errors
-          $webpagesDll = "C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Web.WebPages\v4.0_3.0.0.0__31bf3856ad364e35\System.Web.WebPages.dll"
-          $mvcDll = "C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Web.Mvc\v4.0_5.2.0.0__31bf3856ad364e35\System.Web.Mvc.dll"
-          $razorDll = "C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Web.Razor\v4.0_3.0.0.0__31bf3856ad364e35\System.Web.Razor.dll"
-
-          $args = @(
-            "-v", "/",
-            "-p", "SMSInterface",
-            "precompiled",
-            "/reference:$webpagesDll",
-            "/reference:$mvcDll",
-            "/reference:$razorDll",
-            "-errorstack",
-            "-fixednames",
-            "-nologo"
-          )
-
-          Write-Host "Running: $compiler $($args -join ' ')"
-          & $compiler @args 2>&1 | Tee-Object -FilePath "precompile.log"
-
-          Write-Host "===== Compiler Log Start ====="
-          Get-Content precompile.log
-          Write-Host "===== Compiler Log End ====="
-
-      # 🧱 Step 2: Build the project (to ensure .cs files compile to DLLs)
-      - name: Build website.publishproj
-        run: msbuild SMSInterface/website.publishproj /p:Configuration=Release /p:VisualStudioVersion=12.0
-
-      # 🧱 Step 3: Gather all DLLs
-      - name: Collect all DLLs
+      # -------------------------------------------------
+      # 5. Compile each .cs → .dll (ordered by dependency depth)
+      # -------------------------------------------------
+      - name: Compile .cs files
         shell: pwsh
+        env:
+          CS_LIST: ${{ steps.csfiles.outputs.CS_FILES }}
         run: |
-          Write-Host "🔹 Collecting DLLs..."
-          $allDlls = "all-dlls"
-          if (Test-Path $allDlls) { Remove-Item -Recurse -Force $allDlls }
-          New-Item -ItemType Directory -Path $allDlls | Out-Null
+          $csArray = $env:CS_LIST | ConvertFrom-Json
 
-          if (Test-Path "SMSInterface\Bin") {
-            Copy-Item "SMSInterface\Bin\*.dll" $allDlls -ErrorAction SilentlyContinue
+          # Helper: simple topological sort based on #region DEPENDS_ON comments
+          function Get-Dependencies($path) {
+            $deps = @()
+            if (Test-Path $path) {
+              $content = Get-Content $path -Raw
+              if ($content -match '(?s)//\s*DEPENDS_ON\s*:\s*(.+?)$') {
+                $raw = $Matches[1] -split ',' | ForEach-Object { $_.Trim() }
+                foreach ($d in $raw) { if ($d) { $deps += $d } }
+              }
+            }
+            return $deps
           }
 
-          if (Test-Path "precompiled\Bin") {
-            Copy-Item "precompiled\Bin\*.dll" $allDlls -ErrorAction SilentlyContinue
+          # Build a map: file → list of files it depends on
+          $graph = @{}
+          foreach ($f in $csArray) { $graph[$f] = Get-Dependencies $f }
+
+          # Very small Kahn's algorithm (handles only explicit DEPENDS_ON)
+          $ordered = @()
+          $inDegree = @{}
+          foreach ($f in $csArray) { $inDegree[$f] = 0 }
+          foreach ($f in $csArray) {
+            foreach ($dep in $graph[$f]) {
+              if ($csArray -contains $dep) { $inDegree[$dep]++ }
+            }
           }
 
-          Write-Host "✅ DLLs collected in: $allDlls"
-          Get-ChildItem $allDlls
+          $queue = $csArray | Where-Object { $inDegree[$_] -eq 0 }
+          while ($queue) {
+            $node = $queue[0]
+            $queue = $queue[1..$queue.Length]
+            $ordered += $node
+            foreach ($neighbor in $graph.Keys | Where-Object { $graph[$_] -contains $node }) {
+              $inDegree[$neighbor]--
+              if ($inDegree[$neighbor] -eq 0) { $queue += $neighbor }
+            }
+          }
 
-      # 🧱 Step 4: Upload DLLs as artifact
-      - name: Upload DLL artifact
+          if ($ordered.Count -lt $csArray.Count) {
+            Write-Warning "Circular or missing dependencies detected. Falling back to alphabetical order."
+            $ordered = $csArray | Sort-Object
+          }
+
+          # -------------------------------------------------
+          # Compile in the computed order
+          # -------------------------------------------------
+          $referenceList = @()
+          foreach ($file in $ordered) {
+            $projName = [IO.Path]::GetFileNameWithoutExtension($file)
+            $projDir  = "temp_proj/$projName"
+            New-Item -ItemType Directory -Force -Path $projDir | Out-Null
+
+            # ---- create a minimal .csproj for this file ----
+            $csproj = @"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>   <!-- .NET Framework 4.8 matches most WebForms -->
+    <OutputType>Library</OutputType>
+    <RootNamespace>$projName</RootNamespace>
+    <AssemblyName>$projName</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="`"$($file.Replace('\','\\'))`"" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference every DLL we already built -->
+    $(
+      $referenceList | ForEach-Object { "<Reference Include=`"$([IO.Path]::GetFileNameWithoutExtension($_))`"><HintPath>../artifacts/$([IO.Path]::GetFileName($_))</HintPath></Reference>" }
+    )
+  </ItemGroup>
+</Project>
+"@
+            Set-Content -Path "$projDir/$projName.csproj" -Value $csproj
+
+            # ---- compile ----
+            dotnet build "$projDir/$projName.csproj" -c Release -o artifacts
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            # keep the DLL path for next references
+            $dll = "artifacts/$projName.dll"
+            if (Test-Path $dll) { $referenceList += $dll }
+          }
+
+          Write-Host "All DLLs built → artifacts/"
+
+      # -------------------------------------------------
+      # 6. Upload DLLs as artifact
+      # -------------------------------------------------
+      - name: Upload DLL artifacts
         uses: actions/upload-artifact@v4
         with:
           name: compiled-dlls
-          path: all-dlls/
+          path: artifacts/*.dll
+          if-no-files-found: error
