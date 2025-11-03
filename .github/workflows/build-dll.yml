@@ -1,10 +1,10 @@
-name: Build and Commit DLLs (Visual Studio 2013)
+name: Build and Commit DLLs (C# Compiler)
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,25 +14,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup MSBuild (Visual Studio 2013)
-        uses: microsoft/setup-msbuild@v1.1
-        with:
-          vs-version: '[17.0,18.0)'
-
-      - name: Build Web Solution using MSBuild
-        run: |
-          msbuild "CommonExtranet.sln" /p:Configuration=Release /t:Build /p:VisualStudioVersion=12.0 /p:OutDir="SMSInterface\dlls\\"
-
-      - name: Verify generated DLLs
-        run: dir SMSInterface\dlls
-
-      - name: Commit DLLs to new branch
+      - name: Setup .NET Framework Compiler
         shell: pwsh
         run: |
-          $branch = "dll-builds-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+          $sdk = "C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319"
+          echo "CSC_PATH=$sdk\\csc.exe" >> $env:GITHUB_ENV
+
+      - name: Build all .cs files into DLLs
+        shell: pwsh
+        run: |
+          $dllFolder = "SMSInterface\\dlls"
+          if (!(Test-Path $dllFolder)) { New-Item -ItemType Directory -Path $dllFolder | Out-Null }
+
+          $csFiles = Get-ChildItem -Path "SMSInterface" -Filter "*.cs"
+          foreach ($file in $csFiles) {
+              $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
+              & $env:CSC_PATH /target:library /out:"$dllFolder\\$dllName" "$($file.FullName)"
+          }
+
+          Write-Host "✅ DLLs generated in $dllFolder"
+
+      - name: Verify generated DLLs
+        shell: pwsh
+        run: |
+          Write-Host "Generated DLLs:"
+          Get-ChildItem "SMSInterface\\dlls\\*.dll"
+
+      - name: Commit DLLs to new branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          timestamp=$(date +"%Y%m%d-%H%M%S")
+          branch="dll-build-$timestamp"
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git checkout -b $branch
+          git checkout -b "$branch"
           git add SMSInterface/dlls
-          git commit -m "Add compiled DLLs from build $branch"
-          git push origin $branch
+          git commit -m "Add compiled DLLs - $timestamp"
+          git push origin "$branch"
