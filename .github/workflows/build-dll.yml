@@ -1,8 +1,9 @@
-name: Build and Publish DLLs
+name: Build and Commit DLLs
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - master
   workflow_dispatch:
 
 jobs:
@@ -10,42 +11,60 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      # 1️⃣ Checkout your repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install .NET Framework 4.5.1 targeting pack
-        run: |
-          choco install netfx-4.5.1-devpack -y
-
-      - name: Setup MSBuild (VS 2022)
+      # 2️⃣ Setup MSBuild for .NET Framework
+      - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
-        with:
-          vs-version: 17.0
-          msbuild-architecture: x86
 
-      - name: Verify MSBuild path
-        run: where msbuild
-
-      - name: Create output folder
-        run: mkdir SMSInterface\dlls
-
-      - name: Build solution (without publish profile)
+      # 3️⃣ Create temporary csproj file for compilation
+      - name: Create SMSInterface.csproj
         run: |
-          msbuild CommonExtranet.sln /p:Configuration=Release /p:Platform="Any CPU" /p:DeployOnBuild=false /p:PublishProfile=""
+          New-Item -Path "SMSInterface" -Name "SMSInterface.csproj" -ItemType "file" -Force
+          @"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net451</TargetFramework>
+    <RootNamespace>SMSInterface</RootNamespace>
+    <AssemblyName>SMSInterface</AssemblyName>
+    <OutDir>$(MSBuildThisFileDirectory)dlls\</OutDir>
+  </PropertyGroup>
 
-      - name: Compile each .cs file into separate DLL
-        run: |
-          cd SMSInterface\App_Code
-          for %%f in (*.cs) do (
-            echo Compiling %%f ...
-            csc /target:library /out:"..\dlls\%%~nf.dll" %%f /reference:"System.dll;System.Web.dll;System.Configuration.dll;Microsoft.VisualBasic.dll"
-          )
+  <ItemGroup>
+    <Compile Include="**\*.cs" />
+  </ItemGroup>
 
-      - name: Create new branch for DLLs
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Web.Razor" />
+    <Reference Include="System.Web.WebPages" />
+    <Reference Include="System.Web.WebPages.Deployment" />
+    <Reference Include="System.Web.WebPages.Razor" />
+    <Reference Include="System.Web.Helpers" />
+    <Reference Include="System.Web.Mvc" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+</Project>
+"@ | Out-File -FilePath "SMSInterface/SMSInterface.csproj" -Encoding UTF8
+
+      # 4️⃣ Build project into DLL
+      - name: Build DLL
+        run: msbuild SMSInterface/SMSInterface.csproj /p:Configuration=Release
+
+      # 5️⃣ Commit generated DLLs to new branch
+      - name: Commit DLLs to new branch
         run: |
-          git config user.email "actions@github.com"
+          $branchName = "build-artifacts-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
           git config user.name "github-actions"
-          git checkout -b dll-build-${{ github.run_number }}
-          git add SMSInterface/dlls
-          git commit -m "Add compiled DLLs"
-          git push origin dll-build-${{ github.run_number }}
+          git config user.email "github-actions@github.com"
+          git checkout -b $branchName
+          mkdir -p SMSInterface/dlls
+          git add SMSInterface/dlls/*.dll
+          git commit -m "Add compiled DLLs on $branchName"
+          git push origin $branchName
