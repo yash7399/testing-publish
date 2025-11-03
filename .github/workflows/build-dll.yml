@@ -1,4 +1,4 @@
-name: Build each .cs → .dll
+name: Build each .cs to .dll
 
 on:
   push:
@@ -8,47 +8,45 @@ on:
 
 jobs:
   compile:
-    runs-on: windows-latest   # Windows runner has MSBuild & .NET SDK pre-installed
+    runs-on: windows-latest     # MSBuild + .NET SDK are pre-installed
 
     steps:
       # -------------------------------------------------
-      # 1. Checkout code
+      # 1. Checkout
       # -------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       # -------------------------------------------------
-      # 2. Install .NET SDK (covers .NET Framework via `msbuild`)
+      # 2. Setup .NET (gives us dotnet & msbuild)
       # -------------------------------------------------
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '6.0.x'   # any recent version works for msbuild
+          dotnet-version: '6.0.x'
 
       # -------------------------------------------------
-      # 3. Find every .cs file
+      # 3. Find every .cs file (relative paths)
       # -------------------------------------------------
       - name: List .cs files
         id: csfiles
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path . -Recurse -Filter *.cs | 
+          $files = Get-ChildItem -Path . -Recurse -Filter *.cs |
                    Sort-Object FullName |
-                   ForEach-Object { $_.FullName.Substring($PWD.Path.Length+1) }
+                   ForEach-Object { $_.FullName.Substring((Get-Location).Path.Length + 1) }
           $json = $files | ConvertTo-Json -Compress
           echo "CS_FILES=$json" >> $env:GITHUB_OUTPUT
-          echo "Found $($files.Count) .cs file(s)"
+          Write-Host "Found $($files.Count) .cs file(s)"
 
       # -------------------------------------------------
-      # 4. Prepare output folder
+      # 4. Create output folder
       # -------------------------------------------------
       - name: Create artifacts folder
-        run: mkdir artifacts
+        run: New-Item -ItemType Directory -Force -Path artifacts | Out-Null
 
       # -------------------------------------------------
-      # 5. Compile each .cs → .dll (ordered by dependency depth)
+      # 5. Compile each .cs to .dll (ordered by DEPENDS_ON)
       # -------------------------------------------------
       - name: Compile .cs files
         shell: pwsh
@@ -57,100 +55,45 @@ jobs:
         run: |
           $csArray = $env:CS_LIST | ConvertFrom-Json
 
-          # Helper: simple topological sort based on #region DEPENDS_ON comments
-          function Get-Dependencies($path) {
-            $deps = @()
-            if (Test-Path $path) {
-              $content = Get-Content $path -Raw
-              if ($content -match '(?s)//\s*DEPENDS_ON\s*:\s*(.+?)$') {
-                $raw = $Matches[1] -split ',' | ForEach-Object { $_.Trim() }
-                foreach ($d in $raw) { if ($d) { $deps += $d } }
-              }
-            }
-            return $deps
-          }
+          #
 
-          # Build a map: file → list of files it depends on
-          $graph = @{}
-          foreach ($f in $csArray) { $graph[$f] = Get-Dependencies $f }
+On Thu, Oct 30, 2025, 2:51 PM Yash Shukla <yashh3004@gmail.com> wrote:
+name: Build DLL on push to main
 
-          # Very small Kahn's algorithm (handles only explicit DEPENDS_ON)
-          $ordered = @()
-          $inDegree = @{}
-          foreach ($f in $csArray) { $inDegree[$f] = 0 }
-          foreach ($f in $csArray) {
-            foreach ($dep in $graph[$f]) {
-              if ($csArray -contains $dep) { $inDegree[$dep]++ }
-            }
-          }
+# Trigger when someone pushes to main branch
+on:
+  push:
+    branches:
+      - main
 
-          $queue = $csArray | Where-Object { $inDegree[$_] -eq 0 }
-          while ($queue) {
-            $node = $queue[0]
-            $queue = $queue[1..$queue.Length]
-            $ordered += $node
-            foreach ($neighbor in $graph.Keys | Where-Object { $graph[$_] -contains $node }) {
-              $inDegree[$neighbor]--
-              if ($inDegree[$neighbor] -eq 0) { $queue += $neighbor }
-            }
-          }
+jobs:
+  build-and-upload:
+    # Use Windows runner so you get .NET SDK and typical Windows behavior for DLLs.
+    runs-on: windows-latest
 
-          if ($ordered.Count -lt $csArray.Count) {
-            Write-Warning "Circular or missing dependencies detected. Falling back to alphabetical order."
-            $ordered = $csArray | Sort-Object
-          }
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-          # -------------------------------------------------
-          # Compile in the computed order
-          # -------------------------------------------------
-          $referenceList = @()
-          foreach ($file in $ordered) {
-            $projName = [IO.Path]::GetFileNameWithoutExtension($file)
-            $projDir  = "temp_proj/$projName"
-            New-Item -ItemType Directory -Force -Path $projDir | Out-Null
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'   # change to '7.0.x' if you want net7.0
 
-            # ---- create a minimal .csproj for this file ----
-            $csproj = @"
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>   <!-- .NET Framework 4.8 matches most WebForms -->
-    <OutputType>Library</OutputType>
-    <RootNamespace>$projName</RootNamespace>
-    <AssemblyName>$projName</AssemblyName>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-  </PropertyGroup>
+      - name: Restore (if any)
+        run: dotnet restore HelloLib/HelloLib.csproj
 
-  <ItemGroup>
-    <Compile Include="`"$($file.Replace('\','\\'))`"" />
-  </ItemGroup>
+      - name: Build (Release)
+        run: dotnet build HelloLib/HelloLib.csproj --configuration Release --no-restore
 
-  <ItemGroup>
-    <!-- Reference every DLL we already built -->
-    $(
-      $referenceList | ForEach-Object { "<Reference Include=`"$([IO.Path]::GetFileNameWithoutExtension($_))`"><HintPath>../artifacts/$([IO.Path]::GetFileName($_))</HintPath></Reference>" }
-    )
-  </ItemGroup>
-</Project>
-"@
-            Set-Content -Path "$projDir/$projName.csproj" -Value $csproj
+      - name: Publish output (to folder ./output)
+        run: dotnet publish HelloLib/HelloLib.csproj --configuration Release --no-build --output ./output
 
-            # ---- compile ----
-            dotnet build "$projDir/$projName.csproj" -c Release -o artifacts
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: List output files
+        run: dir ./output
 
-            # keep the DLL path for next references
-            $dll = "artifacts/$projName.dll"
-            if (Test-Path $dll) { $referenceList += $dll }
-          }
-
-          Write-Host "All DLLs built → artifacts/"
-
-      # -------------------------------------------------
-      # 6. Upload DLLs as artifact
-      # -------------------------------------------------
-      - name: Upload DLL artifacts
+      - name: Upload artifact (the DLL and related files)
         uses: actions/upload-artifact@v4
         with:
-          name: compiled-dlls
-          path: artifacts/*.dll
-          if-no-files-found: error
+          name: hello-dll-artifact
+          path: ./output
