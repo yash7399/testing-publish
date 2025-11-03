@@ -1,99 +1,38 @@
-name: Build each .cs to .dll
+name: Build and Commit DLLs (Visual Studio 2013)
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
-jobs:
-  compile:
-    runs-on: windows-latest     # MSBuild + .NET SDK are pre-installed
-
-    steps:
-      # -------------------------------------------------
-      # 1. Checkout
-      # -------------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # -------------------------------------------------
-      # 2. Setup .NET (gives us dotnet & msbuild)
-      # -------------------------------------------------
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '6.0.x'
-
-      # -------------------------------------------------
-      # 3. Find every .cs file (relative paths)
-      # -------------------------------------------------
-      - name: List .cs files
-        id: csfiles
-        shell: pwsh
-        run: |
-          $files = Get-ChildItem -Path . -Recurse -Filter *.cs |
-                   Sort-Object FullName |
-                   ForEach-Object { $_.FullName.Substring((Get-Location).Path.Length + 1) }
-          $json = $files | ConvertTo-Json -Compress
-          echo "CS_FILES=$json" >> $env:GITHUB_OUTPUT
-          Write-Host "Found $($files.Count) .cs file(s)"
-
-      # -------------------------------------------------
-      # 4. Create output folder
-      # -------------------------------------------------
-      - name: Create artifacts folder
-        run: New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-
-      # -------------------------------------------------
-      # 5. Compile each .cs to .dll (ordered by DEPENDS_ON)
-      # -------------------------------------------------
-      - name: Compile .cs files
-        shell: pwsh
-        env:
-          CS_LIST: ${{ steps.csfiles.outputs.CS_FILES }}
-        run: |
-          $csArray = $env:CS_LIST | ConvertFrom-Json
-
-          #
-
-On Thu, Oct 30, 2025, 2:51 PM Yash Shukla <yashh3004@gmail.com> wrote:
-name: Build DLL on push to main
-
-# Trigger when someone pushes to main branch
-on:
+  workflow_dispatch:
   push:
     branches:
-      - main
+      - master
 
 jobs:
-  build-and-upload:
-    # Use Windows runner so you get .NET SDK and typical Windows behavior for DLLs.
+  build:
     runs-on: windows-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+      - name: Setup MSBuild (Visual Studio 2013)
+        uses: microsoft/setup-msbuild@v1.1
         with:
-          dotnet-version: '8.0.x'   # change to '7.0.x' if you want net7.0
+          vs-version: '[12.0,13.0)'
 
-      - name: Restore (if any)
-        run: dotnet restore HelloLib/HelloLib.csproj
+      - name: Build Web Solution using MSBuild
+        run: |
+          msbuild "CommonExtranet.sln" /p:Configuration=Release /t:Build /p:VisualStudioVersion=12.0 /p:OutDir="SMSInterface\dlls\\"
 
-      - name: Build (Release)
-        run: dotnet build HelloLib/HelloLib.csproj --configuration Release --no-restore
+      - name: Verify generated DLLs
+        run: dir SMSInterface\dlls
 
-      - name: Publish output (to folder ./output)
-        run: dotnet publish HelloLib/HelloLib.csproj --configuration Release --no-build --output ./output
-
-      - name: List output files
-        run: dir ./output
-
-      - name: Upload artifact (the DLL and related files)
-        uses: actions/upload-artifact@v4
-        with:
-          name: hello-dll-artifact
-          path: ./output
+      - name: Commit DLLs to new branch
+        shell: pwsh
+        run: |
+          $branch = "dll-builds-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout -b $branch
+          git add SMSInterface/dlls
+          git commit -m "Add compiled DLLs from build $branch"
+          git push origin $branch
