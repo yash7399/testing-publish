@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2022
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -17,35 +17,32 @@ jobs:
       - name: Setup MSBuild (VS 2022)
         uses: microsoft/setup-msbuild@v2
         with:
-          vs-version: '[17.0,18.0)'
+          vs-version: 17.0
+          msbuild-architecture: x86
 
-      - name: Verify MSBuild Path
-        run: where msbuild
+      - name: Verify MSBuild path
+        run: |
+          where msbuild
 
       - name: Create output folder
         run: mkdir SMSInterface\dlls
 
       - name: Build solution
-        run: msbuild CommonExtract.sln /p:Configuration=Release /p:Platform="Any CPU"
+        run: msbuild CommonExtranet.sln /p:Configuration=Release /p:Platform="Any CPU"
 
       - name: Compile each .cs file into separate DLL
-        shell: pwsh
         run: |
-          $src = "SMSInterface"
-          $out = "SMSInterface\dlls"
-          $files = Get-ChildItem $src -Filter *.cs
-          foreach ($f in $files) {
-            $dll = Join-Path $out ($f.BaseName + ".dll")
-            Write-Host "Compiling $($f.Name) -> $dll"
-            & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:library /out:$dll $f.FullName
-          }
+          cd SMSInterface\App_Code
+          for %%f in (*.cs) do (
+            echo Compiling %%f ...
+            csc /target:library /out:"..\dlls\%%~nf.dll" %%f /reference:"System.dll;System.Web.dll;System.Configuration.dll;Microsoft.VisualBasic.dll"
+          )
 
       - name: Create new branch for DLLs
         run: |
-          $branch = "dll-build-" + (Get-Date -Format "yyyyMMdd-HHmmss")
-          git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git checkout -b $branch
-          git add SMSInterface/dlls/*.dll
+          git config user.name "github-actions"
+          git checkout -b dll-build-${{ github.run_number }}
+          git add SMSInterface/dlls
           git commit -m "Add compiled DLLs"
-          git push origin $branch
+          git push origin dll-build-${{ github.run_number }}
