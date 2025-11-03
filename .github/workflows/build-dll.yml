@@ -11,30 +11,34 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 1️⃣ Checkout your repository
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup MSBuild for .NET Framework
+      # 2️⃣ Setup MSBuild
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      # 3️⃣ Create temporary csproj file for compilation
-      - name: Create SMSInterface.csproj
+      # 3️⃣ Create classic .csproj file
+      - name: Create legacy csproj file
+        shell: pwsh
         run: |
-          New-Item -Path "SMSInterface" -Name "SMSInterface.csproj" -ItemType "file" -Force
-          @"
-<Project Sdk="Microsoft.NET.Sdk">
+          $proj = @"
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <OutputType>Library</OutputType>
-    <TargetFramework>net451</TargetFramework>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
+    <OutputPath>dlls\</OutputPath>
     <RootNamespace>SMSInterface</RootNamespace>
     <AssemblyName>SMSInterface</AssemblyName>
-    <OutDir>$(MSBuildThisFileDirectory)dlls\</OutDir>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="**\*.cs" />
+    <Compile Include="App_Code\CommonFunctions.cs" />
+    <Compile Include="*.aspx.cs" />
+    <Compile Include="*.master.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -42,29 +46,25 @@ jobs:
     <Reference Include="System.Core" />
     <Reference Include="System.Data" />
     <Reference Include="System.Web" />
-    <Reference Include="System.Web.Razor" />
-    <Reference Include="System.Web.WebPages" />
-    <Reference Include="System.Web.WebPages.Deployment" />
-    <Reference Include="System.Web.WebPages.Razor" />
-    <Reference Include="System.Web.Helpers" />
-    <Reference Include="System.Web.Mvc" />
     <Reference Include="System.Xml" />
   </ItemGroup>
+
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
-"@ | Out-File -FilePath "SMSInterface/SMSInterface.csproj" -Encoding UTF8
+"@
+          Set-Content -Path "SMSInterface/SMSInterface.csproj" -Value $proj -Encoding UTF8
 
-      # 4️⃣ Build project into DLL
+      # 4️⃣ Build DLL
       - name: Build DLL
-        run: msbuild SMSInterface/SMSInterface.csproj /p:Configuration=Release
+        run: msbuild "SMSInterface/SMSInterface.csproj" /p:Configuration=Release /p:Platform="AnyCPU"
 
-      # 5️⃣ Commit generated DLLs to new branch
+      # 5️⃣ Commit DLLs to new branch
       - name: Commit DLLs to new branch
         run: |
-          $branchName = "build-artifacts-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+          $branchName = "dll-build-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git checkout -b $branchName
-          mkdir -p SMSInterface/dlls
           git add SMSInterface/dlls/*.dll
-          git commit -m "Add compiled DLLs on $branchName"
+          git commit -m "Add compiled DLLs"
           git push origin $branchName
