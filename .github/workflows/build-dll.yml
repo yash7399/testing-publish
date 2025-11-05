@@ -1,43 +1,53 @@
-name: Build DLLs with MSBuild (Self-Hosted)
+name: Build and Generate DLLs
 
 on:
   push:
-    branches:
-      - master
-  workflow_dispatch:
+    branches: [ master ]
 
 jobs:
   build:
-    name: Build and Generate DLLs
-    runs-on: self-hosted
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup MSBuild Path
+      - name: Build with MSBuild
         shell: powershell
         run: |
-          Write-Host 'Using MSBuild from Visual Studio 2022...'
-          $env:Path += ';C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin'
+          Write-Host "🔹 Setting up paths..."
+          $solutionPath = "C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln"
+          $outputPath = "$env:GITHUB_WORKSPACE\SMSInterface\Bin"
 
-      - name: Build solution and generate DLLs
+          if (!(Test-Path $outputPath)) {
+            New-Item -ItemType Directory -Path $outputPath | Out-Null
+            Write-Host "✅ Created output directory: $outputPath"
+          }
+
+          Write-Host "🔹 Starting MSBuild..."
+          & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" $solutionPath /p:Configuration=Release /p:OutputPath=$outputPath /p:Platform="Any CPU"
+          Write-Host "✅ Build completed successfully."
+
+      - name: Verify DLLs
         shell: powershell
         run: |
-          Write-Host 'Starting MSBuild...'
-          $dllPath = "$env:GITHUB_WORKSPACE\dll"
-          & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' "C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln" /p:Configuration=Release /p:OutputPath=$dllPath /p:Platform='Any CPU'
-          Write-Host 'Build completed successfully.'
+          $dllPath = "$env:GITHUB_WORKSPACE\SMSInterface\Bin"
+          if (Test-Path $dllPath) {
+            $dlls = Get-ChildItem -Path $dllPath -Recurse -Include *.dll
+            if ($dlls) {
+              Write-Host "✅ DLL files generated:"
+              $dlls | ForEach-Object { Write-Host $_.FullName }
+            } else {
+              Write-Host "⚠️ Build succeeded but no DLL files found inside $dllPath"
+            }
+          } else {
+            Write-Host "❌ DLL folder not found: $dllPath"
+            exit 1
+          }
 
-      - name: List generated DLLs
-        shell: powershell
-        run: |
-          $dllPath = "$env:GITHUB_WORKSPACE\dll"
-          Write-Host "DLL files generated at $dllPath"
-          Get-ChildItem -Path $dllPath -Recurse -Include *.dll | ForEach-Object { Write-Host $_.FullName }
-
-      - name: Upload DLL artifacts
+      - name: Upload DLLs as Artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: compiled-dlls
-          path: dll/
+          name: generated-dlls
+          path: SMSInterface/Bin/
