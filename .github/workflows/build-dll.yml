@@ -1,28 +1,37 @@
-name: Build DLLs (ASP.NET WebForms)
+name: Build DLLs with MSBuild (Self-Hosted)
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: self-hosted  # your local VS2022 runner
-
+    name: Build and Generate DLLs
+    runs-on: self-hosted        # 👈 your local runner
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Clean output folder
+      - name: Setup MSBuild Path
         run: |
-          if (Test-Path "dll") { Remove-Item -Recurse -Force "dll" }
-          New-Item -ItemType Directory -Force -Path "dll"
+          echo "Using MSBuild from Visual Studio 2022..."
+          $env:Path += ';C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin'
 
-            - name: Build solution and generate DLLs
-              run: |
-                & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" "CommonExtranet.sln" /p:Configuration=Release /p:OutputPath=dll /p:Platform="Any CPU"
-
-
+      - name: Build solution and generate DLLs
+        run: |
+          Write-Host "🔹 Starting MSBuild..."
+          & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" "CommonExtranet.sln" /p:Configuration=Release /p:OutputPath=dll /p:Platform="Any CPU"
+          Write-Host "✅ Build completed successfully."
+      
       - name: List generated DLLs
-        run: dir dll
+        run: |
+          Write-Host "📦 DLL files generated:"
+          Get-ChildItem -Path dll -Recurse -Include *.dll | ForEach-Object { Write-Host $_.FullName }
+
+      - name: Upload DLL artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-dlls
+          path: dll/
