@@ -28,11 +28,12 @@ jobs:
           & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln' /p:Configuration=Release /p:OutputPath=dll /p:Platform='Any CPU'
           Write-Host 'Build completed successfully.'
 
-      - name: List generated DLLs
-        shell: powershell
-        run: |
-          Write-Host 'DLL files generated:'
-          Get-ChildItem -Path dll -Recurse -Include *.dll | ForEach-Object { Write-Host $_.FullName }
+            - name: List generated DLLs
+              shell: powershell
+              run: |
+                Write-Host 'DLL files generated:'
+                Get-ChildItem -Path . -Recurse -Include *.dll | ForEach-Object { Write-Host $_.FullName }
+
 
       - name: Upload DLL artifacts
         uses: actions/upload-artifact@v4
