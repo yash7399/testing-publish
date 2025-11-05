@@ -25,7 +25,7 @@ jobs:
         shell: powershell
         run: |
           Write-Host 'Starting MSBuild...'
-          & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'CommonExtranet.sln' /p:Configuration=Release /p:OutputPath=dll /p:Platform='Any CPU'
+          & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln' /p:Configuration=Release /p:OutputPath=dll /p:Platform='Any CPU'
           Write-Host 'Build completed successfully.'
 
       - name: List generated DLLs
