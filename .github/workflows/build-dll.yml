@@ -25,21 +25,16 @@ jobs:
         shell: powershell
         run: |
           Write-Host 'Starting MSBuild...'
-          & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln' /p:Configuration=Release /p:OutputPath=dll /p:Platform='Any CPU'
+          $dllPath = "$env:GITHUB_WORKSPACE\dll"
+          & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' "C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln" /p:Configuration=Release /p:OutputPath=$dllPath /p:Platform='Any CPU'
           Write-Host 'Build completed successfully.'
 
       - name: List generated DLLs
         shell: powershell
         run: |
-          $dllPath = "C:\Users\yashh\Desktop\testing-publish\dll"
+          $dllPath = "$env:GITHUB_WORKSPACE\dll"
           Write-Host "DLL files generated at $dllPath"
           Get-ChildItem -Path $dllPath -Recurse -Include *.dll | ForEach-Object { Write-Host $_.FullName }
-
-      - name: Upload DLL artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: compiled-dlls
-          path: C:\Users\yashh\Desktop\testing-publish\dll
 
       - name: Upload DLL artifacts
         uses: actions/upload-artifact@v4
