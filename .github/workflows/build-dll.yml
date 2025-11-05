@@ -14,14 +14,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Optional: Clean old output folder
       - name: Clean output folder
         run: |
           if (Test-Path "dll") { Remove-Item -Recurse -Force "dll" }
           New-Item -ItemType Directory -Force -Path "dll"
 
-      # Build using Visual Studio 2022 MSBuild
-      - name: Build backend code into DLLs
+      - name: Build solution and generate DLLs
         run: >
           "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
           "CommonExtranet.sln"
