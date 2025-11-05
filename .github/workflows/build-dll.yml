@@ -23,21 +23,22 @@ jobs:
       - name: Build solution and generate DLLs
         shell: powershell
         run: |
-          Write-Host "🔹 Starting MSBuild..."
-          $solutionPath = "C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln"
-          $outputPath = "C:\Users\yashh\Desktop\testing-publish\dll"
-
+          Write-Host '🔹 Starting MSBuild...'
+          $solutionPath = 'C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln'
+          $outputPath = 'C:\Users\yashh\Desktop\testing-publish\dll'
+          
           # Ensure DLL folder exists
           if (-Not (Test-Path $outputPath)) {
             New-Item -ItemType Directory -Path $outputPath | Out-Null
           }
-
+      
           # Run MSBuild
-          & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" `
-            $solutionPath /p:Configuration=Release /p:OutputPath=$outputPath /p:Platform="Any CPU"
-
-          Write-Host "✅ Build completed successfully."
+          & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' `
+            $solutionPath /p:Configuration=Release /p:OutputPath=$outputPath /p:Platform='Any CPU'
+      
+          Write-Host '✅ Build completed successfully.'
           Write-Host "DLLs should be inside $outputPath"
+
 
       # 4️⃣ List generated DLL files
       - name: List generated DLLs
