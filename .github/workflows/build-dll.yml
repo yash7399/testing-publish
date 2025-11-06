@@ -39,15 +39,15 @@ jobs:
       - name: Generate DLLs for individual .cs files
         shell: powershell
         run: |
-          Write-Host 'Creating individual DLLs for each .cs file...'
+          Write-Host "Creating individual DLLs for each .cs file..."
           $csFiles = Get-ChildItem -Path . -Recurse -Include *.cs
           foreach ($file in $csFiles) {
-            $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + '.dll'
+            $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
             $outputPath = Join-Path (Resolve-Path dll) $dllName
-            Write-Host "🔹 Compiling $($file.FullName) → $dllName"
-            & 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe' /target:library /out:$outputPath $file.FullName
+            Write-Host ("🔹 Compiling " + $file.FullName + " → " + $dllName)
+            & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /target:library /out:$outputPath $file.FullName
           }
-          Write-Host 'All .cs files compiled to DLLs.'
+          Write-Host "All .cs files compiled to DLLs."
 
       - name: Verify generated DLLs
         shell: powershell
