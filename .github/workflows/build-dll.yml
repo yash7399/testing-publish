@@ -40,14 +40,29 @@ jobs:
         shell: powershell
         run: |
           Write-Host "Creating individual DLLs for each .cs file..."
+          
+          # Ensure output directory exists
+          if (-Not (Test-Path -Path "dll")) {
+            New-Item -ItemType Directory -Path "dll" | Out-Null
+          }
+
+          # Find all .cs files recursively
           $csFiles = Get-ChildItem -Path . -Recurse -Include *.cs
+
           foreach ($file in $csFiles) {
             $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
             $outputPath = Join-Path (Resolve-Path dll) $dllName
-            Write-Host ("🔹 Compiling " + $file.FullName + " → " + $dllName)
-            & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /target:library /out:$outputPath $file.FullName
+            Write-Host ("Compiling: " + $file.FullName + " -> " + $dllName)
+            
+            & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /target:library "/out:$outputPath" "$($file.FullName)"
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ("Failed to compile " + $file.FullName)
+              exit 1
+            }
           }
-          Write-Host "All .cs files compiled to DLLs."
+
+          Write-Host "All .cs files compiled to DLLs successfully."
 
       - name: Verify generated DLLs
         shell: powershell
