@@ -32,8 +32,9 @@ jobs:
           $publishProj = "SMSInterface\website.publishproj"
           $outputDir = "dll"
           if (Test-Path $outputDir) { Remove-Item -Recurse -Force $outputDir }
-          & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" `
-            $publishProj `
+          $msbuild = (Get-Command msbuild).Source
+          Write-Host "Using MSBuild from: $msbuild"
+          & $msbuild $publishproj `
             /p:Configuration=Release `
             /p:WebPublishMethod=FileSystem `
             /p:DeleteExistingFiles=True `
