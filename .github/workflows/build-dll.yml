@@ -1,89 +1,48 @@
-name: Build and Generate DLLs (Self-Hosted)
+name: Build DLLs for SMSInterface
 
 on:
   push:
     branches:
+      - main
       - master
+      - dll-artifacts
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build and Generate DLL
-    runs-on: self-hosted
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: 🔹 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup MSBuild
-        shell: powershell
+      - name: 🔹 Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: 🔹 Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: 🔹 Restore any NuGet packages
+        run: nuget restore CommonExtranet.sln
+
+      - name: 🔹 Build Website Project (precompile DLLs)
+        shell: pwsh
         run: |
-          Write-Host 'Setting up MSBuild...'
-          $env:Path += ';C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin'
+          Write-Host "🏗️ Starting ASP.NET precompilation..."
+          $publishProj = "SMSInterface\website.publishproj"
+          $outputDir = "dll"
+          if (Test-Path $outputDir) { Remove-Item -Recurse -Force $outputDir }
+          & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" `
+            $publishProj `
+            /p:Configuration=Release `
+            /p:WebPublishMethod=FileSystem `
+            /p:DeleteExistingFiles=True `
+            /p:publishUrl=$outputDir `
+            /p:OutputPath=$outputDir
+          Write-Host "✅ Build completed successfully. DLLs are in the 'dll' folder."
 
-      - name: Create clean dll folder
-        shell: powershell
-        run: |
-          Write-Host 'Cleaning old dll folder...'
-          if (Test-Path dll) { Remove-Item -Recurse -Force dll }
-          New-Item -ItemType Directory -Path dll | Out-Null
-          Write-Host 'dll folder created.'
-
-      - name: Build solution and generate base DLLs
-        shell: powershell
-        run: |
-          Write-Host 'Starting MSBuild...'
-          & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln' /p:Configuration=Release /p:OutputPath=dll /p:Platform='Any CPU'
-          Write-Host 'Build completed successfully.'
-
-      - name: Generate DLLs for individual .cs files
-        shell: powershell
-        run: |
-          Write-Host "Creating individual DLLs for each .cs file..."
-          
-          # Ensure output directory exists
-          if (-Not (Test-Path -Path "dll")) {
-            New-Item -ItemType Directory -Path "dll" | Out-Null
-          }
-
-          # Find all .cs files recursively
-          $csFiles = Get-ChildItem -Path . -Recurse -Include *.cs
-
-          foreach ($file in $csFiles) {
-            $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + ".dll"
-            $outputPath = Join-Path (Resolve-Path dll) $dllName
-            Write-Host ("Compiling: " + $file.FullName + " -> " + $dllName)
-            
-            & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /target:library "/out:$outputPath" "$($file.FullName)"
-            
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host ("Failed to compile " + $file.FullName)
-              exit 1
-            }
-          }
-
-          Write-Host "All .cs files compiled to DLLs successfully."
-
-      - name: Verify generated DLLs
-        shell: powershell
-        run: |
-          Write-Host 'DLL files generated:'
-          Get-ChildItem -Path dll -Recurse -Include *.dll | ForEach-Object { Write-Host $_.FullName }
-
-      - name: Push DLLs to dll-artifacts branch
-        shell: powershell
-        run: |
-          Write-Host ' Pushing DLLs to dll-artifacts branch...'
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git checkout -B dll-artifacts
-          git add dll
-          git commit -m "Add generated DLLs"
-          git push -f origin dll-artifacts
-          Write-Host 'DLLs pushed to dll-artifacts branch.'
-
-      - name: Upload DLL artifacts (optional backup)
+      - name: 🔹 Upload DLLs as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: compiled-dlls
+          name: website-dlls
           path: dll/
