@@ -1,67 +1,74 @@
-name: Build individual DLLs for backend files
+name: Build and Generate DLLs (Self-Hosted)
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
   build:
+    name: Build and Generate DLLs
     runs-on: self-hosted
-    name: Build and Commit DLLs
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup MSBuild Path
+      - name: Setup MSBuild
         shell: powershell
         run: |
-          Write-Host 'Setting up MSBuild...'
+          Write-Host '✅ Setting up MSBuild...'
           $env:Path += ';C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin'
 
-      - name: Build project using full solution path
+      - name: Create clean dll folder
         shell: powershell
         run: |
-          $sln = "C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln"
-          Write-Host "Building solution: $sln"
-          & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' "$sln" /p:Configuration=Release /p:Platform="Any CPU"
-          Write-Host 'Build completed successfully.'
+          Write-Host '🧹 Cleaning old dll folder...'
+          if (Test-Path dll) { Remove-Item -Recurse -Force dll }
+          New-Item -ItemType Directory -Path dll | Out-Null
+          Write-Host '✅ dll folder created.'
 
-      - name: Prepare DLL output folder
+      - name: Build solution and generate base DLLs
         shell: powershell
         run: |
-          $dllDir = "${{ github.workspace }}\SMSInterface\dll"
-          if (Test-Path $dllDir) { Remove-Item -Recurse -Force $dllDir }
-          New-Item -ItemType Directory -Force -Path $dllDir | Out-Null
+          Write-Host '🛠️  Starting MSBuild...'
+          & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'D:\path\to\CommonExtranet.sln' /p:Configuration=Release /p:OutputPath=dll /p:Platform='Any CPU'
+          Write-Host '✅ Build completed successfully.'
 
-          # Find all .cs files except designer and aspx.cs
-          $csFiles = Get-ChildItem -Path "${{ github.workspace }}\SMSInterface" -Recurse -Include *.cs | Where-Object { $_.Name -notmatch '\.designer\.cs$' -and $_.Name -notmatch '\.aspx\.cs$' }
-
-          Write-Host "Found $($csFiles.Count) C# backend files. Generating DLLs..."
-
+      - name: Generate DLLs for individual .cs files
+        shell: powershell
+        run: |
+          Write-Host '⚙️ Creating individual DLLs for each .cs file...'
+          $csFiles = Get-ChildItem -Path . -Recurse -Include *.cs
           foreach ($file in $csFiles) {
-              $name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
-              $dllPath = Join-Path $dllDir "$name.dll"
-              & 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe' /target:library /out:$dllPath $file.FullName
-              Write-Host ("Built DLL for " + $file.Name)
+            $dllName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) + '.dll'
+            $outputPath = Join-Path (Resolve-Path dll) $dllName
+            Write-Host "🔹 Compiling $($file.FullName) → $dllName"
+            & 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe' /target:library /out:$outputPath $file.FullName
           }
+          Write-Host '✅ All .cs files compiled to DLLs.'
 
-          Write-Host "All DLLs generated successfully."
-
-      - name: Commit and push DLLs to new branch
+      - name: Verify generated DLLs
         shell: powershell
         run: |
+          Write-Host '📂 DLL files generated:'
+          Get-ChildItem -Path dll -Recurse -Include *.dll | ForEach-Object { Write-Host $_.FullName }
+
+      - name: Push DLLs to dll-artifacts branch
+        shell: powershell
+        run: |
+          Write-Host '🚀 Pushing DLLs to dll-artifacts branch...'
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+          git checkout -B dll-artifacts
+          git add dll
+          git commit -m "Add generated DLLs"
+          git push -f origin dll-artifacts
+          Write-Host '✅ DLLs pushed to dll-artifacts branch.'
 
-          $branch = "dll-artifacts"
-          git checkout -B $branch
-          git add SMSInterface/dll/
-          git commit -m "Auto-generated DLLs for backend files"
-          git push origin $branch --force
-
-          Write-Host "✅ DLLs pushed to branch '$branch'"
+      - name: Upload DLL artifacts (optional backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-dlls
+          path: dll/
