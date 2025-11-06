@@ -34,21 +34,23 @@ jobs:
       - name: Prepare DLL output folder
         shell: powershell
         run: |
-          $dllDir = "$PWD\SMSInterface\dll"
+          $dllDir = "${{ github.workspace }}\SMSInterface\dll"
           if (Test-Path $dllDir) { Remove-Item -Recurse -Force $dllDir }
           New-Item -ItemType Directory -Force -Path $dllDir | Out-Null
 
-          # Find all .cs files in SMSInterface, except designer and aspx.cs
-          $csFiles = Get-ChildItem -Path "$PWD\SMSInterface" -Recurse -Include *.cs | Where-Object { $_.Name -notmatch '\.designer\.cs$' -and $_.Name -notmatch '\.aspx\.cs$' }
+          # Find all .cs files except designer and aspx.cs
+          $csFiles = Get-ChildItem -Path "${{ github.workspace }}\SMSInterface" -Recurse -Include *.cs | Where-Object { $_.Name -notmatch '\.designer\.cs$' -and $_.Name -notmatch '\.aspx\.cs$' }
 
           Write-Host "Found $($csFiles.Count) C# backend files. Generating DLLs..."
-          
+
           foreach ($file in $csFiles) {
               $name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
               $dllPath = Join-Path $dllDir "$name.dll"
               & 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe' /target:library /out:$dllPath $file.FullName
-              Write-Host "✔ Built DLL for $($file.Name)"
+              Write-Host ("Built DLL for " + $file.Name)
           }
+
+          Write-Host "All DLLs generated successfully."
 
       - name: Commit and push DLLs to new branch
         shell: powershell
