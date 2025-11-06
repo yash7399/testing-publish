@@ -18,10 +18,6 @@ jobs:
       - name: Ensure NuGet (for package restore)
         uses: NuGet/setup-nuget@v2
 
-      - name: Restore NuGet packages (if any)
-        run: nuget restore "CommonExtranet.sln"
-        shell: pwsh
-
       - name: Detect MSBuild on runner
         id: msbuild
         shell: pwsh
