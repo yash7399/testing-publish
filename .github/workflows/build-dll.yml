@@ -1,49 +1,124 @@
-name: Build DLLs for SMSInterface
+name: Build Website and produce dlls.zip (Self-Hosted)
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - main
       - master
-      - dll-artifacts
-  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: windows-latest
+  build-and-zip:
+    name: Build and produce dlls.zip
+    runs-on: self-hosted
 
     steps:
-      - name: 🔹 Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: 🔹 Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: 🔹 Setup NuGet
+      - name: Ensure NuGet (for package restore)
         uses: NuGet/setup-nuget@v2
 
-      - name: 🔹 Restore any NuGet packages
-        run: nuget restore CommonExtranet.sln
+      - name: Restore NuGet packages (if any)
+        run: nuget restore "CommonExtranet.sln"
+        shell: pwsh
 
-      - name: 🔹 Build Website Project (precompile DLLs)
+      - name: Detect MSBuild on runner
+        id: msbuild
         shell: pwsh
         run: |
-          Write-Host "🏗️ Starting ASP.NET precompilation..."
+          $cmd = Get-Command msbuild -ErrorAction SilentlyContinue
+          if ($null -eq $cmd) {
+            Write-Host "MSBuild not found on PATH. Trying known VS2022 msbuild location..."
+            $candidate = "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
+            if (Test-Path $candidate) { $cmd = @{ Source = $candidate } }
+          }
+          if ($null -eq $cmd) { Write-Error "MSBuild not found; please ensure MSBuild is installed on runner."; exit 1 }
+          Write-Host "MSBuild detected at: $($cmd.Source)"
+          Write-Output "::set-output name=msbuild_path::$($cmd.Source)"
+
+      - name: Prepare clean output directory
+        shell: pwsh
+        run: |
+          $out = "dll_out"
+          if (Test-Path $out) { Remove-Item -Recurse -Force $out }
+          New-Item -ItemType Directory -Path $out | Out-Null
+          Write-Host "Created clean output folder: $out"
+
+      - name: Build Website (precompile) into dll_out
+        shell: pwsh
+        env:
+          MSBUILD_PATH: ${{ steps.msbuild.outputs.msbuild_path }}
+        run: |
+          $msbuild = $env:MSBUILD_PATH
+          if (-not (Test-Path $msbuild)) {
+            Write-Error "MSBuild path not found: $msbuild"
+            exit 1
+          }
+          Write-Host "Using MSBuild: $msbuild"
+
+          # relative path to your publishproj (adjust if your path differs)
           $publishProj = "SMSInterface\website.publishproj"
-          $outputDir = "dll"
-          if (Test-Path $outputDir) { Remove-Item -Recurse -Force $outputDir }
-          $msbuild = (Get-Command msbuild).Source
-          Write-Host "Using MSBuild from: $msbuild"
-          & $msbuild $publishproj `
+          if (-not (Test-Path $publishProj)) {
+            Write-Error "Publish project not found at: $publishProj. Please confirm path."
+            exit 1
+          }
+
+          $out = (Resolve-Path "dll_out").Path
+
+          # Use WebPublishMethod=FileSystem and publishUrl=out to get compiled DLLs
+          & $msbuild $publishProj `
             /p:Configuration=Release `
             /p:WebPublishMethod=FileSystem `
-            /p:DeleteExistingFiles=True `
-            /p:publishUrl=$outputDir `
-            /p:OutputPath=$outputDir
-          Write-Host "✅ Build completed successfully. DLLs are in the 'dll' folder."
+            /p:DeleteExistingFiles=true `
+            /p:publishUrl=$out `
+            /p:OutputPath=$out `
+            /p:OutDir=$out
 
-      - name: 🔹 Upload DLLs as artifact
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "MSBuild failed (exit code $LASTEXITCODE)."
+            exit $LASTEXITCODE
+          }
+
+          Write-Host "MSBuild completed. Expected output under: $out"
+
+      - name: List repo & dll_out contents (debug)
+        shell: pwsh
+        run: |
+          Write-Host "===== Repository root listing ====="
+          Get-ChildItem -Force -Recurse -Depth 2 | Select-Object FullName,Length
+
+          Write-Host "===== dll_out recursive listing (full) ====="
+          Get-ChildItem -Path dll_out -Recurse -Force | Select-Object FullName,Length
+
+      - name: Collect all DLLs and create dlls.zip
+        shell: pwsh
+        run: |
+          $out = (Resolve-Path "dll_out").Path
+          $dllFiles = Get-ChildItem -Path $out -Recurse -Include *.dll -File
+          if ($dllFiles.Count -eq 0) {
+            Write-Host "No DLLs found under $out. Failing so you can inspect logs."
+            exit 1
+          }
+          Write-Host "Found $($dllFiles.Count) DLL(s). Creating zip..."
+          $zipPath = Join-Path (Resolve-Path ".").Path "dlls.zip"
+
+          if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
+          # Compress-Archive overwrites only if -Force in PS Core; ensure remove then compress
+          Compress-Archive -Path (Join-Path $out "*") -DestinationPath $zipPath
+
+          if (-not (Test-Path $zipPath)) {
+            Write-Error "Failed to create dlls.zip"
+            exit 1
+          }
+          Write-Host "Created zip: $zipPath"
+
+      - name: Show zip details
+        shell: pwsh
+        run: |
+          Get-Item dlls.zip | Format-List FullName,Length
+
+      - name: Upload dlls.zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: website-dlls
-          path: dll/
+          name: dlls-zip
+          path: dlls.zip
