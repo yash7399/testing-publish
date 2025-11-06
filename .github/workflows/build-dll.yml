@@ -1,53 +1,65 @@
-name: Build and Generate DLLs
+name: Build individual DLLs for backend files
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ master ]
+    branches:
+      - master
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: self-hosted
+    name: Build and Commit DLLs
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Build with MSBuild
-        shell: powershell
-        run: |
-          Write-Host "🔹 Setting up paths..."
-          $solutionPath = "C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln"
-          $outputPath = "$env:GITHUB_WORKSPACE\SMSInterface\Bin"
-
-          if (!(Test-Path $outputPath)) {
-            New-Item -ItemType Directory -Path $outputPath | Out-Null
-            Write-Host "✅ Created output directory: $outputPath"
-          }
-
-          Write-Host "🔹 Starting MSBuild..."
-          & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" $solutionPath /p:Configuration=Release /p:OutputPath=$outputPath /p:Platform="Any CPU"
-          Write-Host "✅ Build completed successfully."
-
-      - name: Verify DLLs
-        shell: powershell
-        run: |
-          $dllPath = "$env:GITHUB_WORKSPACE\SMSInterface\Bin"
-          if (Test-Path $dllPath) {
-            $dlls = Get-ChildItem -Path $dllPath -Recurse -Include *.dll
-            if ($dlls) {
-              Write-Host "✅ DLL files generated:"
-              $dlls | ForEach-Object { Write-Host $_.FullName }
-            } else {
-              Write-Host "⚠️ Build succeeded but no DLL files found inside $dllPath"
-            }
-          } else {
-            Write-Host "❌ DLL folder not found: $dllPath"
-            exit 1
-          }
-
-      - name: Upload DLLs as Artifacts
-        if: success()
-        uses: actions/upload-artifact@v4
         with:
-          name: generated-dlls
-          path: SMSInterface/Bin/
+          fetch-depth: 0
+
+      - name: Setup MSBuild Path
+        shell: powershell
+        run: |
+          Write-Host 'Setting up MSBuild...'
+          $env:Path += ';C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin'
+
+      - name: Build project using full solution path
+        shell: powershell
+        run: |
+          $sln = "C:\Users\yashh\Desktop\testing-publish\CommonExtranet.sln"
+          Write-Host "Building solution: $sln"
+          & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' "$sln" /p:Configuration=Release /p:Platform="Any CPU"
+          Write-Host 'Build completed successfully.'
+
+      - name: Prepare DLL output folder
+        shell: powershell
+        run: |
+          $dllDir = "$PWD\SMSInterface\dll"
+          if (Test-Path $dllDir) { Remove-Item -Recurse -Force $dllDir }
+          New-Item -ItemType Directory -Force -Path $dllDir | Out-Null
+
+          # Find all .cs files in SMSInterface, except designer and aspx.cs
+          $csFiles = Get-ChildItem -Path "$PWD\SMSInterface" -Recurse -Include *.cs | Where-Object { $_.Name -notmatch '\.designer\.cs$' -and $_.Name -notmatch '\.aspx\.cs$' }
+
+          Write-Host "Found $($csFiles.Count) C# backend files. Generating DLLs..."
+          
+          foreach ($file in $csFiles) {
+              $name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+              $dllPath = Join-Path $dllDir "$name.dll"
+              & 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe' /target:library /out:$dllPath $file.FullName
+              Write-Host "✔ Built DLL for $($file.Name)"
+          }
+
+      - name: Commit and push DLLs to new branch
+        shell: powershell
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          $branch = "dll-artifacts"
+          git checkout -B $branch
+          git add SMSInterface/dll/
+          git commit -m "Auto-generated DLLs for backend files"
+          git push origin $branch --force
+
+          Write-Host "✅ DLLs pushed to branch '$branch'"
